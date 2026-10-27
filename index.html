@@ -198,6 +198,7 @@ td.bg-ROJO{background:var(--rojo2)!important}td.bg-AMARILLO{background:var(--amb
   <button data-t="esc">Escalera · edad y color</button>
   <button data-t="peso">Peso y edad de corte</button>
   <button data-t="prod">Ratio · peso · recobro</button>
+  <button data-t="merma">Merma · cajas perdidas</button>
   <button data-t="recus">Recusados</button>
   <button data-t="enflote">Enfunde por lote</button>
   <button data-t="sig">Sigatoka</button>
@@ -221,6 +222,7 @@ td.bg-ROJO{background:var(--rojo2)!important}td.bg-AMARILLO{background:var(--amb
   <section class="tab" id="t-esc"></section>
   <section class="tab" id="t-peso"></section>
   <section class="tab" id="t-prod"></section>
+  <section class="tab" id="t-merma"></section>
   <section class="tab" id="t-recus"></section>
   <section class="tab" id="t-enflote"></section>
   <section class="tab" id="t-sig"></section>
@@ -866,12 +868,16 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
     const ws = sheet(wb, /par.metros/i); const rows = rowsOf(ws);
     const h = (rows[0] || []).map(up); const ix = (re) => h.findIndex((x) => re.test(x));
     const c = { fecha: 0, cod: 1, edad8: ix(/EDAD 8$/), total: ix(/^TOTAL RACIMOS CORTADOS/), recus: ix(/^RACIMOS RECUSADOS/), proc: ix(/^TOTAL RACIMOS PROCESADOS/),
-      area: ix(/^AREA CORTADA/), c1: ix(/^CAJAS 1RA/), c2: ix(/^CAJAS 2DA/), peso: ix(/^PROMEDIO PESO RACIMO/), sem: ix(/^SEMANA$/), sinc: ix(/SIN CINTA/), merma: ix(/^MERMA$/) };
+      area: ix(/^AREA CORTADA/), c1: ix(/^CAJAS 1RA/), c2: ix(/^CAJAS 2DA/), peso: ix(/^PROMEDIO PESO RACIMO/), sem: ix(/^SEMANA$/), sinc: ix(/SIN CINTA/), merma: ix(/^MERMA$/), dia: ix(/^DIA$/), rha: ix(/^RACIMOS \/ HECT/) };
     const prod = {}, cohort = {}, pe = {};
     const cA = { peso: {}, cal: {}, manos: {}, dedo: {} };
     for (let a = 9; a <= 16; a++) { cA.peso[a] = ix(new RegExp('^PESO RACIMO EDAD ' + a + '$')); cA.cal[a] = ix(new RegExp('^CALIBRACION SUBBASAL EDAD ' + a + '$')); cA.manos[a] = ix(new RegExp('^NUMERO MANOS EDAD ' + a + '$')); cA.dedo[a] = ix(new RegExp('^LARGO DEDO EDAD ' + a + '$')); }
     const add = (o, k, v) => { o[k] = (o[k] || 0) + (v || 0); };
-    for (const r of rows.slice(1)) {
+    const DIAS = /^(LUNES|MARTES|MIERCOLES|JUEVES|VIERNES|SABADO|DOMINGO)$/;
+    for (const r0 of rows.slice(1)) {
+      // desde oct-2026 algunas filas vienen sin la columna "Racimos / Hectárea": se corre todo una posición a la izquierda
+      let r = r0;
+      if (c.dia > 0 && c.rha > 0 && !DIAS.test(up(r0[c.dia])) && DIAS.test(up(r0[c.dia - 1]))) { r = r0.slice(); r.splice(c.rha, 0, null); }
       const d = toDate(r[c.fecha]); if (!d) continue;
       const farm = CODE[up(r[c.cod])]; if (!farm) continue;
       let w = num(r[c.sem]); let y = d.getUTCFullYear();
@@ -882,6 +888,9 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
       add(P, 'cajas', (num(r[c.c1]) || 0) + (num(r[c.c2]) || 0)); add(P, 'area', num(r[c.area])); add(P, 'sinCinta', num(r[c.sinc]));
       const pr = num(r[c.peso]), np = num(r[c.proc]);
       if (pr && np) { add(P, 'pesoX', pr * np); add(P, 'pesoN', np); }
+      // MERMA (% de peso no aprovechado en empacadora); antes de sep-2025 la columna tenía otro significado
+      const mm = c.merma >= 0 ? num(r[c.merma]) : null;
+      if (mm != null && np && mm >= 0 && mm <= 60 && (y > 2025 || (y === 2025 && d.getUTCMonth() >= 8))) { add(P, 'mermaX', mm / 100 * np); add(P, 'mermaN', np); }
       // parámetros por edad (peso, calibración, manos, dedo) — se filtran valores imposibles
       for (let a = 9; a <= 15; a++) {
         const n = num(r[c.edad8 + (a - 8)]); if (!n) continue;
@@ -1393,7 +1402,7 @@ const range = (a, b) => { const r = []; for (let i = a; i <= b; i++) r.push(i); 
 const LS = { get(k, d) { try { const v = localStorage.getItem('vf_' + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } }, set(k, v) { try { localStorage.setItem('vf_' + k, JSON.stringify(v)); } catch (e) {} } };
 
 let M = null;
-const S = { farms: LS.get('farms', null), group: LS.get('group', 'ALL'), year: null, cmp: null, w1: 1, w2: null, unit: LS.get('unit', 'tot'), precio: LS.get('precio', 7.5), tab: LS.get('tab', 'resumen'),
+const S = { farms: LS.get('farms', null), group: LS.get('group', 'ALL'), year: null, cmp: null, w1: 1, w2: null, unit: LS.get('unit', 'tot'), precio: LS.get('precio', 7.5), mermaMeta: LS.get('mermaMeta', 0.06), tab: LS.get('tab', 'resumen'),
   sigMetric: 'ylws', prodMetric: 'ratio', fertCiclo: null, histMode: 'ytd', heatKind: 'cajas' };
 
 // ===================== IndexedDB (carpeta conectada y último modelo) =====================
@@ -1547,7 +1556,8 @@ function groupRange(kind, farms, y, w1, w2, perHa) {
 // si el consolidado Pb9 aún no tiene la semana, se usa el Reporte de Producción semanal (Pd Semanal)
 function pdProd(f, y, w) { const p = M.pdSem?.[y * 100 + w]?.farms?.[f]; if (!p || !p.cort) return null;
   return { cortados: p.cort, recusados: p.rech || 0, procesados: p.proc || 0, cajas: (p.cajas1 || 0) + (p.cajas2 || 0), area: p.haSem || 0, sinCinta: p.sinCinta || 0, pesoX: p.peso && p.proc ? p.peso * p.proc : 0, pesoN: p.peso && p.proc ? p.proc : 0, src: 'pd' }; }
-const prodW = (f, y, w) => M.prod?.[f]?.[y]?.[w] || pdProd(f, y, w);
+// el Reporte de Producción semanal (hoja Semana) es el cierre oficial: si existe para esa semana, manda sobre la base Pb9 (que puede estar incompleta)
+const prodW = (f, y, w) => { const b = M.prod?.[f]?.[y]?.[w], p = pdProd(f, y, w); if (!p) return b || null; if (!b) return p; const o = Object.assign({}, b, p); if (!p.pesoN) { o.pesoX = b.pesoX; o.pesoN = b.pesoN; } return o; };
 // parámetros de la semana de cosecha desde la escalera (días a calibración, calibraciones, manos, largo de dedo)
 function escHarv(f, y, w) { const k = y + '-' + w; for (const yy of [y, y + 1, y - 1]) { const h = M.escalera?.[yy]?.[f]?.harv?.[k]; if (h) return h; } return null; }
 function escParam(farms, y, w, k) { let s = 0, n = 0; for (const f of farms) { const h = escHarv(f, y, w); if (!h || h[k] == null) continue; const wt = h.proc || 1; s += h[k] * wt; n += wt; } return n ? s / n : null; }
@@ -1712,7 +1722,7 @@ function bindFilters() {
   $('#bFiles').onclick = () => $('#filesBox').classList.toggle('open');
   $('#bCsv').onclick = exportCsv;
   $('#bApp').onclick = openAppPanel;
-  $('#bRep').onclick = () => (M ? openReportPanel('prod') : null);
+  $('#bRep').onclick = () => (M && !$('#bRep').hidden ? openReportPanel('prod') : null);
   $('#bRepS').onclick = () => (M ? openReportPanel('sig') : null);
   $('#bFilt').onclick = () => $('#filters').classList.toggle('open');
   $('#appPanel').onclick = (e) => { if (e.target.id === 'appPanel') $('#appPanel').hidden = true; };
@@ -1724,7 +1734,7 @@ function renderAll() { showTab(); rendered.clear(); renderTab(S.tab); }
 const rendered = new Set();
 function renderTab(t) {
   if (!M) return;
-  const fn = { resumen: rResumen, cajas: () => rHist('cajas'), enfunde: () => rHist('enfunde'), recus: rRecus, enflote: rEnfLote, esc: rEsc, per: rPer, peso: rPeso, prod: rProd, sig: rSig, lluvia: rLluvia, fert: rFert, lab: rLab, maestra: rMaestra, calidad: rCalidad }[t];
+  const fn = { resumen: rResumen, cajas: () => rHist('cajas'), enfunde: () => rHist('enfunde'), recus: rRecus, enflote: rEnfLote, esc: rEsc, per: rPer, peso: rPeso, prod: rProd, sig: rSig, lluvia: rLluvia, fert: rFert, lab: rLab, maestra: rMaestra, calidad: rCalidad, merma: rMerma }[t];
   try { fn(); } catch (e) { document.getElementById('t-' + t).innerHTML = `<div class="card c-ROJO">Error al dibujar: ${esc(e.message)}</div>`; console.error(e); }
 }
 const W = () => (S.year === M.year ? Math.min(S.w2, M.lastWeek) : S.w2);
@@ -1801,6 +1811,7 @@ function rResumen() {
     <div class="card"><h3>Impacto económico</h3><p class="note">Valorado a $${S.precio.toFixed(2)}/caja. Recobro: cohortes S${w - 18}–S${w - 15}.</p>
       <div class="scroll"><table class="t"><tr><th class="l">Concepto</th><th>Cantidad</th><th>USD</th></tr>
       <tr><td class="l">Racimos bajo meta de recobro 98%</td><td>${fmt.int(recRac)} rac</td><td class="c-ROJO">${fmt.usd(recUSD)}</td></tr>
+      ${(() => { const a = mermaAgg(selFarms().map((f) => mermaW(f, S.year, w))); return a.n ? `<tr><td class="l">Merma de la semana (proceso ${fmt.p1(a.m)}, recusados, campo${a.sbN ? ', sobrepeso' : ''}) · ver pestaña Merma</td><td>${fmt.int(a.cjTot)} cj</td><td class="c-ROJO">${fmt.usd(a.usd.tot)}</td></tr>` : ''; })()}
       <tr><td class="l">Caída de cajas vs S${w - 1}${caida > 0 && (llp > 80 || ll > 80) ? ' (lluvia)' : ''}</td><td>${fmt.int(caida)} cj</td><td>${fmt.usd(caida * S.precio)}</td></tr>
       <tr><td class="l">Fertilizante C${cyc} en bodega sin aplicar (&gt;14 d)</td><td>${fmt.int(fertSac)} sacos</td><td>${fmt.usd(fertUSD)}</td></tr></table></div>
       <div class="scroll" style="margin-top:8px"><table class="t"><tr><th class="l">Hacienda</th><th>Recobro</th><th>Racimos perdidos</th><th>USD</th></tr>
@@ -2583,6 +2594,127 @@ function rRecus() {
   chart('rc4', { type: 'bar', data: { labels: lp.map((x) => x.id), datasets: [{ label: 'Rec/ha', data: lp.map((x) => x.rha), backgroundColor: '#c62828', borderRadius: 3 }] }, options: { plugins: { legend: { display: false } } } });
 }
 
+// ===================== MERMA: cajas perdidas por proceso, recusados, campo (recobro) y sobrepeso =====================
+// Costo de insumos y labores por racimo enfundado (Informe de merma 2026): funda 0.07 + corbatín 0.01 + protector 0.0475 + zuncho 0.1725 + fertilización 0.3487 + labor enfunde 0.0071
+const COSTO_RAC = 0.6558;
+const mermaMeta = () => (S.mermaMeta ?? 0.06);
+function siomaBand(f, y, w) { return (M.sioma?.bandejas || []).find((r) => r.f === f && r.y === y && r.w === w) || null; }
+function mermaW(f, y, w) {
+  const p = prodW(f, y, w); const pd = M.pdSem?.[y * 100 + w]?.farms?.[f];
+  if (!p && !pd) return null;
+  const proc = pd?.proc || p?.procesados || 0; const cort = pd?.cort || p?.cortados || 0; const rech = pd?.rech ?? p?.recusados ?? 0;
+  const cajas = (pd ? (pd.cajas1 || 0) + (pd.cajas2 || 0) : null) || weekVal('cajas', f, y, w) || p?.cajas || 0;
+  const ratio = proc ? cajas / proc : null; const peso = pd?.peso || (p?.pesoN ? p.pesoX / p.pesoN : null);
+  let m = null, mSrc = '';
+  if (pd && pd.rechProc > 0 && pd.rechProc < 0.6) { m = pd.rechProc; mSrc = 'pd'; } else if (p?.mermaN) { m = p.mermaX / p.mermaN; mSrc = 'pb9'; }
+  const k = m != null && m < 0.95 ? m / (1 - m) : null;
+  const cjProc = k != null ? cajas * k : null; const cjEvit = m != null ? cajas * Math.max(0, m - mermaMeta()) / (1 - m) : null;
+  const cjRech = ratio ? rech * ratio : null;
+  // campo: cohorte enfundada 15 semanas antes (completa) — racimos que faltan para llegar al 98%
+  let cy = y, cw = w - 15; if (cw <= 0) { cy -= 1; cw += 52; }
+  const x = cohortRec([f], cy, cw); const x4 = cw >= 4 ? rec4([f], cy, cw) : null; const rr = x4 ? x4.r : x?.r;
+  // se usa el recobro de 4 cohortes para no castigar cintas mal asignadas entre semanas vecinas
+  const racCampo = x && rr != null ? Math.max(0, 0.98 - rr) * x.e : null; const cjCampo = racCampo != null && ratio ? racCampo * ratio : null;
+  const sb = siomaBand(f, y, w); const cjSob = sb ? sb.regal : null;
+  const usd = { proc: (cjProc || 0) * S.precio, evit: (cjEvit || 0) * S.precio, rech: (cjRech || 0) * S.precio + rech * COSTO_RAC, campo: (cjCampo || 0) * S.precio + (racCampo || 0) * COSTO_RAC, sob: (cjSob || 0) * S.precio };
+  const cjTot = (cjProc || 0) + (cjRech || 0) + (cjCampo || 0) + (cjSob || 0);
+  return { f, y, w, proc, cort, rech, cajas, ratio, peso, m, mSrc, cjProc, cjEvit, cjRech, cohort: x ? { y: cy, w: cw, e: x.e, c: x.c, r: x.r, r4: rr } : null, racCampo, cjCampo, sb, cjSob, cjTot,
+    usd: Object.assign(usd, { tot: usd.proc + usd.rech + usd.campo + usd.sob }), pctCaj: cajas ? cjTot / (cajas + cjTot) : null };
+}
+function mermaAgg(list) {
+  const o = { proc: 0, cort: 0, rech: 0, cajas: 0, cjProc: 0, cjEvit: 0, cjRech: 0, racCampo: 0, cjCampo: 0, cjSob: 0, cjTot: 0, usd: { proc: 0, evit: 0, rech: 0, campo: 0, sob: 0, tot: 0 }, mX: 0, mN: 0, pX: 0, pN: 0, ce: 0, cc: 0, sbN: 0, sbC: 0, sbB: 0, sbS: 0, sbLb: 0, r4X: 0, r4N: 0, n: 0 };
+  for (const r of list) { if (!r) continue; o.n++;
+    for (const k of ['proc', 'cort', 'rech', 'cajas', 'cjProc', 'cjEvit', 'cjRech', 'racCampo', 'cjCampo', 'cjSob', 'cjTot']) o[k] += r[k] || 0;
+    for (const k of Object.keys(o.usd)) o.usd[k] += r.usd[k] || 0;
+    if (r.m != null) { o.mX += r.m * r.proc; o.mN += r.proc; } if (r.peso) { o.pX += r.peso * r.proc; o.pN += r.proc; }
+    if (r.cohort) { o.ce += r.cohort.e; o.cc += r.cohort.c; if (r.cohort.r4 != null) { o.r4X += r.cohort.r4 * r.cohort.e; o.r4N += r.cohort.e; } }
+    if (r.sb) { const n = r.sb.caj || 0; o.sbN += n; o.sbC += n * (r.sb.cor || 0) / 100; o.sbB += n * (r.sb.bajo || 0) / 100; o.sbS += n * (r.sb.sobre || 0) / 100; o.sbLb += n * (r.sb.sbLb || 0); } }
+  o.ratio = o.proc ? o.cajas / o.proc : null; o.m = o.mN ? o.mX / o.mN : null; o.peso = o.pN ? o.pX / o.pN : null; o.rec = o.ce ? o.cc / o.ce : null; o.rec4 = o.r4N ? o.r4X / o.r4N : o.rec; o.recPct = o.cort ? o.rech / o.cort : null;
+  o.pctCaj = o.cajas ? o.cjTot / (o.cajas + o.cjTot) : null;
+  return o;
+}
+function rMerma() {
+  const el = $('#t-merma'); const farms = selFarms(); const y = S.year; const w1 = S.w1, w2 = W(); const ws = range(w1, w2);
+  const G = {}; for (const f of farms) G[f] = ws.map((w) => mermaW(f, y, w));
+  const A = {}; for (const f of farms) A[f] = mermaAgg(G[f]);
+  const T = mermaAgg(farms.flatMap((f) => G[f])); const haG = sum(farms.map((f) => haOf(f, y)));
+  const fs = farms.filter((f) => A[f].n);
+  const fSel = S.merF && farms.includes(S.merF) ? S.merF : (fs[0] || farms[0]);
+  const mc = (m) => (m == null ? '' : m > mermaMeta() + 0.04 ? 'bg-ROJO' : m > mermaMeta() ? 'bg-AMARILLO' : 'bg-VERDE');
+  const rcls = (r) => (r == null ? '' : r < 0.95 || r > 1.02 ? 'bg-ROJO' : r < 0.98 ? 'bg-AMARILLO' : 'bg-VERDE');
+  const sF = Object.keys(M.sioma?.fincas || {}).filter((f) => farms.includes(f) && (M.sioma?.bandejas || []).some((r) => r.f === f && r.y === y));
+  const kpi = (l, v, s, c = '') => `<div class="kpi ${c}"><div class="l">${l}</div><div class="v">${v}</div><div class="s">${s}</div></div>`;
+  const rowF = (f, a) => `<tr><td class="l">${f ? NOM[f] : '<b>Total</b>'}</td><td>${fmt.int(a.proc)}</td><td>${fmt.int(a.cajas)}</td><td>${fmt.d3(a.ratio)}</td><td>${fmt.d2(a.peso)}</td>
+    <td class="${mc(a.m)}">${fmt.p1(a.m)}</td><td>${fmt.int(a.cjProc)}</td><td>${fmt.int(a.cjEvit)}</td>
+    <td>${fmt.int(a.rech)}</td><td>${a.recPct == null ? '—' : (a.recPct * 100).toFixed(2) + '%'}</td><td>${fmt.int(a.cjRech)}</td>
+    <td class="${rcls(a.rec4)}">${fmt.p1(a.rec4)}</td><td>${fmt.int(a.racCampo)}</td><td>${fmt.int(a.cjCampo)}</td>
+    <td>${a.sbN ? fmt.d1(a.cjSob) : '—'}</td><td><b>${fmt.int(a.cjTot)}</b></td><td>${fmt.p1(a.pctCaj)}</td><td><b>${fmt.usd(a.usd.tot)}</b></td><td>${fmt.d2((f ? haOf(f, y) : haG) ? a.cjTot / (f ? haOf(f, y) : haG) : null)}</td></tr>`;
+  const det = G[fSel] || [];
+  const top = fs.slice().sort((a, b) => A[b].usd.tot - A[a].usd.tot)[0];
+  const parts = [['Proceso (empacadora)', T.cjProc, T.usd.proc], ['Racimos recusados', T.cjRech, T.usd.rech], ['Campo (recobro < 98%)', T.cjCampo, T.usd.campo], ['Sobrepeso de bandejas (Sioma)', T.cjSob, T.usd.sob]];
+  el.innerHTML = `<div class="toolbar"><span class="note">${esc(selName())} · ${y} · S${w1}–S${w2}. Cajas valoradas a $${S.precio.toFixed(2)}; recusados y campo suman además $${COSTO_RAC} de insumos y labores por racimo (funda, corbatín, protector, zuncho, fertilización, enfunde).</span>
+    <label class="note">Meta merma proceso <input id="merMeta" type="number" step="0.5" min="0" max="30" value="${(mermaMeta() * 100).toFixed(1)}" style="width:64px"> %</label></div>
+  <div class="kpis">
+    ${kpi('Cajas perdidas (total)', fmt.int(T.cjTot), `${fmt.p1(T.pctCaj)} de la producción potencial · ${fmt.d2(haG ? T.cjTot / haG : null)} cj/ha`, T.pctCaj > 0.12 ? 'rojo' : T.pctCaj > 0.08 ? 'amarillo' : 'verde')}
+    ${kpi('Valor de la merma', fmt.usd(T.usd.tot), `${fmt.usd(T.usd.tot / ws.length)} por semana`, 'rojo')}
+    ${kpi('Merma de proceso', fmt.p1(T.m), `${fmt.int(T.cjProc)} cj · ${fmt.int(T.cjEvit)} evitables sobre meta ${fmt.p1(mermaMeta())}`, T.m > mermaMeta() + 0.04 ? 'rojo' : T.m > mermaMeta() ? 'amarillo' : 'verde')}
+    ${kpi('Recusados', fmt.int(T.rech) + ' rac', `${T.recPct == null ? '—' : (T.recPct * 100).toFixed(2) + '%'} · ${fmt.int(T.cjRech)} cj · ${fmt.usd(T.usd.rech)}`, T.recPct > 0.015 ? 'rojo' : T.recPct > 0.01 ? 'amarillo' : 'verde')}
+    ${kpi('Campo (recobro 4 coh.)', fmt.p1(T.rec4), `${fmt.int(T.racCampo)} rac bajo 98% · ${fmt.int(T.cjCampo)} cj · ${fmt.usd(T.usd.campo)}`, T.rec4 == null ? '' : T.rec4 < 0.95 ? 'rojo' : T.rec4 < 0.98 ? 'amarillo' : 'verde')}
+    ${kpi('Sobrepeso bandejas', T.sbN ? fmt.d1(T.cjSob) + ' cj' : '—', T.sbN ? `${fmt.p1(T.sbC / T.sbN)} correctas · ${fmt.p1(T.sbB / T.sbN)} bajo · ${fmt.p1(T.sbS / T.sbN)} sobre` : 'sin Sioma en la selección', T.sbN && T.sbC / T.sbN < 0.95 ? 'amarillo' : '')}
+  </div>
+  <div class="grid">
+    <div class="card"><h3>Cajas perdidas por semana y causa</h3><div class="chart"><canvas id="mm1"></canvas></div></div>
+    <div class="card"><h3>Dónde se pierde · ${esc(selName())}</h3><table class="t"><tr><th class="l">Causa</th><th>Cajas</th><th>%</th><th>USD</th></tr>
+      ${parts.map((p) => `<tr><td class="l">${p[0]}</td><td>${fmt.int(p[1])}</td><td>${fmt.p1(T.cjTot ? p[1] / T.cjTot : null)}</td><td>${fmt.usd(p[2])}</td></tr>`).join('')}
+      <tr style="font-weight:700"><td class="l">Total</td><td>${fmt.int(T.cjTot)}</td><td>100%</td><td>${fmt.usd(T.usd.tot)}</td></tr></table>
+      <p class="note" style="margin-top:8px">${top ? `<b>${NOM[top]}</b> concentra la mayor pérdida: ${fmt.usd(A[top].usd.tot)} (${fmt.int(A[top].cjTot)} cajas). ` : ''}Proceso = peso que entra a empacadora y no sale en caja (% Rechazo Proceso del reporte semanal; si falta, MERMA de la base Pb9). Campo = racimos de la cohorte enfundada 15 semanas antes que faltan para el 98%, medido con el recobro de las últimas 4 cohortes (así una cinta mal asignada a la semana vecina no infla la pérdida).</p></div>
+  </div>
+  <h2>Merma por hacienda · S${w1}–S${w2}</h2>
+  <div class="card scroll"><table class="t"><tr><th class="l">Hacienda</th><th>Racimos proc.</th><th>Cajas</th><th>Ratio</th><th>Peso kg</th><th>% merma proceso</th><th>Cj perdidas proceso</th><th>Cj evitables</th><th>Recusados</th><th>% rec.</th><th>Cj recusados</th><th>Recobro</th><th>Rac. campo</th><th>Cj campo</th><th>Cj sobrepeso</th><th>Cajas perdidas</th><th>% potencial</th><th>USD</th><th>Cj perd./ha</th></tr>
+    ${fs.map((f) => rowF(f, A[f])).join('')}${rowF(null, T).replace('<tr>', '<tr style="font-weight:700">')}</table></div>
+  <div class="grid" style="margin-top:14px">
+    <div class="card"><h3>USD perdidos por hacienda y causa</h3><div class="chart"><canvas id="mm2"></canvas></div></div>
+    <div class="card"><h3>% merma de proceso por semana</h3><div class="chart"><canvas id="mm3"></canvas></div></div>
+  </div>
+  <h2>% merma de proceso · hacienda × semana</h2>
+  <div class="card scroll"><table class="t"><tr><th class="l">Hacienda</th>${ws.map((w) => `<th>S${w}</th>`).join('')}<th>Prom.</th></tr>
+    ${fs.map((f) => `<tr><td class="l">${NOM[f]}</td>${G[f].map((r) => `<td class="${mc(r?.m)}" title="${r ? `${fmt.int(r.cjProc)} cj · ${r.mSrc === 'pd' ? 'reporte semanal' : 'base Pb9'}` : ''}">${r?.m != null ? (r.m * 100).toFixed(1) : ''}</td>`).join('')}<td><b>${fmt.p1(A[f].m)}</b></td></tr>`).join('')}</table></div>
+  <h2>Detalle semanal</h2>
+  <div class="card scroll"><div class="toolbar"><select id="merF">${farms.map((f) => `<option value="${f}" ${f === fSel ? 'selected' : ''}>${NOM[f]}</option>`).join('')}</select><span class="note">Cohorte = semana de enfunde que completa su cosecha en esa semana.</span></div>
+    <table class="t"><tr><th class="l">Semana</th><th>Rac. cortados</th><th>Procesados</th><th>Cajas</th><th>Ratio</th><th>Peso kg</th><th>% merma</th><th>Cj proceso</th><th>Recusados</th><th>Cj recus.</th><th>Cohorte</th><th>Enfundados</th><th>Cosechados</th><th>Recobro cohorte</th><th>Recobro 4 coh.</th><th>Rac. campo</th><th>Cj campo</th><th>% bandejas OK</th><th>% bajo</th><th>% sobre</th><th>Cj regaladas</th><th>Cajas perdidas</th><th>USD</th></tr>
+    ${det.map((r, i) => r ? `<tr><td class="l">S${ws[i]}</td><td>${fmt.int(r.cort)}</td><td>${fmt.int(r.proc)}</td><td>${fmt.int(r.cajas)}</td><td>${fmt.d3(r.ratio)}</td><td>${fmt.d2(r.peso)}</td><td class="${mc(r.m)}">${fmt.p1(r.m)}</td><td>${fmt.int(r.cjProc)}</td><td>${fmt.int(r.rech)}</td><td>${fmt.int(r.cjRech)}</td>
+      <td>${r.cohort ? 'S' + r.cohort.w + (r.cohort.y !== y ? '/' + r.cohort.y : '') : '—'}</td><td>${fmt.int(r.cohort?.e)}</td><td>${fmt.int(r.cohort?.c)}</td><td class="${rcls(r.cohort?.r)}">${fmt.p1(r.cohort?.r)}</td><td class="${rcls(r.cohort?.r4)}">${fmt.p1(r.cohort?.r4)}</td><td>${fmt.int(r.racCampo)}</td><td>${fmt.int(r.cjCampo)}</td>
+      <td>${r.sb ? fmt.p1(r.sb.cor / 100) : '—'}</td><td>${r.sb ? fmt.p1(r.sb.bajo / 100) : '—'}</td><td>${r.sb ? fmt.p1(r.sb.sobre / 100) : '—'}</td><td>${r.sb ? fmt.d1(r.sb.regal) : '—'}</td><td><b>${fmt.int(r.cjTot)}</b></td><td>${fmt.usd(r.usd.tot)}</td></tr>` : `<tr><td class="l">S${ws[i]}</td><td colspan="22" class="l">sin datos</td></tr>`).join('')}</table></div>
+  <h2>Peso de bandejas · Sioma</h2>
+  ${sF.length ? `<div class="grid">
+    <div class="card"><h3>Bandejas correctas, bajo peso y sobrepeso por semana</h3><div class="toolbar"><select id="merS">${sF.map((f) => `<option value="${f}" ${f === (S.merS || sF[0]) ? 'selected' : ''}>${NOM[f]}</option>`).join('')}</select></div><div class="chart"><canvas id="mm4"></canvas></div></div>
+    <div class="card scroll"><h3>Resumen por hacienda · S${w1}–S${w2}</h3><table class="t"><tr><th class="l">Hacienda</th><th>Bandejas</th><th>% correctas</th><th>% bajo peso</th><th>% sobrepeso</th><th>Sobrepeso prom. lb/bandeja</th><th>Lb regaladas</th><th>Cajas regaladas</th><th>USD</th></tr>
+      ${sF.map((f) => { const a = A[f]; return `<tr><td class="l">${NOM[f]}</td><td>${fmt.int(a.sbN)}</td><td class="${a.sbN && a.sbC / a.sbN < 0.95 ? 'bg-AMARILLO' : 'bg-VERDE'}">${fmt.p1(a.sbN ? a.sbC / a.sbN : null)}</td><td class="${a.sbN && a.sbB / a.sbN > 0.02 ? 'bg-ROJO' : ''}">${fmt.p1(a.sbN ? a.sbB / a.sbN : null)}</td><td class="${a.sbN && a.sbS / a.sbN > 0.05 ? 'bg-AMARILLO' : ''}">${fmt.p1(a.sbN ? a.sbS / a.sbN : null)}</td><td>${fmt.d3(a.sbN ? a.sbLb / a.sbN : null)}</td><td>${fmt.int(a.sbLb)}</td><td>${fmt.d1(a.cjSob)}</td><td>${fmt.usd(a.usd.sob)}</td></tr>`; }).join('')}</table>
+      <p class="note" style="margin-top:8px">Sioma: % bandejas por tipo respecto al peso de embarque tolerable; sobrepeso neto promedio por bandeja; cajas regaladas = sobrepeso no tolerable ÷ peso de caja. Bajo peso &gt;2% expone a reclamos del exportador; sobrepeso es fruta regalada. Fincas sin báscula Sioma: ${Object.keys(NOM).filter((f) => farms.includes(f) && !sF.includes(f)).map((f) => NOM[f]).join(', ') || 'ninguna'}.</p></div>
+  </div>` : '<div class="card note">Sin datos de bandejas de Sioma para la selección (Sioma pesa en Paulita, Porvenir, M. Auxiliadora y Previsora 3).</div>'}`;
+  $('#merF').onchange = (e) => { S.merF = e.target.value; rMerma(); };
+  $('#merMeta').onchange = (e) => { const v = parseFloat(e.target.value); S.mermaMeta = isFinite(v) ? v / 100 : 0.06; LS.set('mermaMeta', S.mermaMeta); rMerma(); };
+  if ($('#merS')) $('#merS').onchange = (e) => { S.merS = e.target.value; rMerma(); };
+  const wk = ws.map((w) => mermaAgg(farms.map((f) => G[f][w - w1])));
+  const COLS = ['#ef6c00', '#c62828', '#8e24aa', '#1565c0'];
+  chart('mm1', { data: { labels: ws.map((w) => 'S' + w), datasets: [
+    ...[['Proceso', 'cjProc'], ['Recusados', 'cjRech'], ['Campo', 'cjCampo'], ['Sobrepeso', 'cjSob']].map(([l, k], i) => ({ type: 'bar', label: l, data: wk.map((a) => a.n ? a[k] : null), backgroundColor: COLS[i], stack: 's', yAxisID: 'y' })),
+    { type: 'line', label: 'USD', data: wk.map((a) => a.n ? a.usd.tot : null), borderColor: '#1f5130', borderWidth: 2.5, pointRadius: 2, yAxisID: 'y1' }] },
+    options: { scales: { x: { stacked: true }, y: { stacked: true, title: { display: true, text: 'cajas' } }, y1: { position: 'right', grid: { display: false }, ticks: { callback: (v) => '$' + Math.round(v).toLocaleString('es-EC') } } } } });
+  chart('mm2', { type: 'bar', data: { labels: fs.map((f) => NOM[f]), datasets: [['Proceso', 'proc'], ['Recusados', 'rech'], ['Campo', 'campo'], ['Sobrepeso', 'sob']].map(([l, k], i) => ({ label: l, data: fs.map((f) => A[f].usd[k]), backgroundColor: COLS[i], stack: 's' })) },
+    options: { scales: { x: { stacked: true }, y: { stacked: true, ticks: { callback: (v) => '$' + Math.round(v).toLocaleString('es-EC') } } } } });
+  chart('mm3', { type: 'line', data: { labels: ws.map((w) => 'S' + w), datasets: [...fs.map((f) => ({ label: NOM[f], data: G[f].map((r) => r?.m ?? null), borderColor: FARM_COL[E.FARMS.indexOf(f)], borderWidth: 1.8, pointRadius: 1.5, spanGaps: true })), refLine('Meta', mermaMeta(), ws.length, '#1f5130')] },
+    options: { scales: { y: { ticks: { callback: (v) => (v * 100).toFixed(0) + '%' } } }, plugins: { tooltip: { callbacks: { label: (c) => `${c.dataset.label}: ${(c.raw * 100).toFixed(1)}%` } } } } });
+  if (sF.length) { const fS = S.merS && sF.includes(S.merS) ? S.merS : sF[0]; const rs = ws.map((w) => siomaBand(fS, y, w));
+    chart('mm4', { data: { labels: ws.map((w) => 'S' + w), datasets: [
+      { type: 'bar', label: '% correctas', data: rs.map((r) => r ? r.cor / 100 : null), backgroundColor: '#43a047', stack: 's', yAxisID: 'y' },
+      { type: 'bar', label: '% bajo peso', data: rs.map((r) => r ? r.bajo / 100 : null), backgroundColor: '#c62828', stack: 's', yAxisID: 'y' },
+      { type: 'bar', label: '% sobrepeso', data: rs.map((r) => r ? r.sobre / 100 : null), backgroundColor: '#f2b705', stack: 's', yAxisID: 'y' },
+      { type: 'line', label: 'Cajas regaladas', data: rs.map((r) => r ? r.regal : null), borderColor: '#1f5130', borderWidth: 2, pointRadius: 2, yAxisID: 'y1' }] },
+      options: { scales: { x: { stacked: true }, y: { stacked: true, min: 0, max: 1, ticks: { callback: (v) => Math.round(v * 100) + '%' } }, y1: { position: 'right', grid: { display: false }, title: { display: true, text: 'cajas' } } },
+        plugins: { tooltip: { callbacks: { label: (c) => c.dataset.yAxisID === 'y' ? `${c.dataset.label}: ${(c.raw * 100).toFixed(1)}%` : `${c.dataset.label}: ${c.raw}` } } } } }); }
+}
+
 // ===================== ENFUNDE POR LOTE (ENFUNDE VIESFRUT <año>) =====================
 function enfLoteStats(f, y, w1, w2) {
   const F = M.enfLote?.[y]?.[f]; if (!F) return null;
@@ -2898,6 +3030,17 @@ async function buildWeeklyPDF(y, w, onp = () => {}) {
     Y = addImg(doc, I, Y, chartImg(barCfg(lblP, [...vals, tv], `Viesfrut S.A. · ${title} - ${y}`, { min: lo, vl: f })), 470, 190);
     Y = rich(doc, nar(), 60, Y, pageW(doc) - 120, 10, I) + 10;
   }
+  // ===== Merma =====
+  await tick2('Merma…'); Y = pdfPage(doc, I); Y = secT(doc, `MERMA Y CAJAS PERDIDAS SEMANA ${w}`, Y);
+  const MR = FS.map((f) => mermaW(f, y, w)).filter(Boolean); const MT = mermaAgg(MR);
+  Y = tbl(doc, Y, [['Hacienda', 'Ratio', 'Peso kg', '% Merma proc.', 'Cj proceso', 'Recusados', 'Cj recus.', 'Recobro 4 coh.', 'Rac. campo', 'Cj campo', 'Cj sobrepeso', 'Cajas perdidas', 'USD']],
+    [...MR.map((r) => rowOf([NOM[r.f], n2(r.ratio), n2(r.peso), pc2(r.m), n0(r.cjProc), n0(r.rech), n0(r.cjRech), r.cohort ? pc2(r.cohort.r4) : '', n0(r.racCampo), n0(r.cjCampo), r.sb ? n1(r.cjSob) : '', n0(r.cjTot), fmt.usd(r.usd.tot)], r.f)),
+      rowOf(['Total Viesfrut', n2(MT.ratio), n2(MT.peso), pc2(MT.m), n0(MT.cjProc), n0(MT.rech), n0(MT.cjRech), pc2(MT.rec4), n0(MT.racCampo), n0(MT.cjCampo), MT.sbN ? n1(MT.cjSob) : '', n0(MT.cjTot), fmt.usd(MT.usd.tot)], null, { __tot: 1 })], { fs: 7, left: 36, right: 36, hfs: 6.5 });
+  Y = addImg(doc, I, Y, chartImg({ type: 'bar', data: { labels: MR.map((r) => NOM[r.f]), datasets: [['Proceso', 'cjProc', '#ef6c00'], ['Recusados', 'cjRech', '#c62828'], ['Campo', 'cjCampo', '#8e24aa'], ['Sobrepeso', 'cjSob', '#1565c0']].map(([l, k, c]) => ({ label: l, data: MR.map((r) => r[k] || 0), backgroundColor: c, stack: 's' })) },
+    options: { plugins: { title: { text: `VIESFRUT S.A. · CAJAS PERDIDAS POR CAUSA · SEMANA ${w} - ${y}` } }, scales: { x: { stacked: true }, y: { stacked: true } } } }), 470, 200);
+  const mTop = MR.slice().sort((a, b) => b.usd.tot - a.usd.tot); const mHi = MR.filter((r) => r.m != null).sort((a, b) => b.m - a.m);
+  const sbR = MR.filter((r) => r.sb);
+  Y = rich(doc, `La semana ${w} dejó **${n0(MT.cjTot)} cajas perdidas (${pc2(MT.pctCaj)} de la producción potencial), valoradas en ${fmt.usd(MT.usd.tot)}** a $${S.precio.toFixed(2)}/caja más $${COSTO_RAC} de insumos por racimo perdido: proceso ${n0(MT.cjProc)} cj (${fmt.usd(MT.usd.proc)}), recusados ${n0(MT.cjRech)} cj (${fmt.usd(MT.usd.rech)}), campo ${n0(MT.cjCampo)} cj (${fmt.usd(MT.usd.campo)})${MT.sbN ? ` y sobrepeso de bandejas ${n1(MT.cjSob)} cj (${fmt.usd(MT.usd.sob)})` : ''}.\n\n**Merma de proceso más alta:** ${mHi.slice(0, 3).map((r) => `${NOM[r.f]} ${pc2(r.m)}`).join(', ')} (meta ${pc2(mermaMeta())}; ${n0(MT.cjEvit)} cajas evitables sobre la meta). **Mayor pérdida en dinero:** ${mTop.slice(0, 3).map((r) => `${NOM[r.f]} ${fmt.usd(r.usd.tot)}`).join(', ')}.${sbR.length ? `\n\n**Peso de bandejas (Sioma):** ${sbR.map((r) => `${NOM[r.f]} ${pc2(r.sb.cor / 100)} correctas, ${pc2(r.sb.bajo / 100)} bajo peso, ${pc2(r.sb.sobre / 100)} sobrepeso (${n1(r.sb.regal)} cj regaladas)`).join('; ')}.` : ''}`, 60, Y, pageW(doc) - 120, 10, I);
   // ===== Semáforo y acciones =====
   await tick2('Semáforo y acciones…'); Y = pdfPage(doc, I); Y = secT(doc, `SEMÁFORO POR HACIENDA Y 3 ACCIONES CORRECTIVAS · SEMANA ${w}`, Y);
   const st = FS.map((f) => farmStatus(f, w));
@@ -3125,7 +3268,11 @@ async function appOpen(file, silent) {
   showLogin(file); return false;
 }
 async function appShow(model, file, user) {
-  $('#login').hidden = true; await setModel(model, false);
+  $('#login').hidden = true;
+  // los informes PDF solo los genera el administrador (alfonso)
+  const admin = String(user || '').toLowerCase() === 'alfonso';
+  for (const id of ['bRep', 'bRepS']) { const b = document.getElementById(id); if (b) b.hidden = !admin; }
+  await setModel(model, false);
   prog(`${user} · datos semana ${file.semana || model.lastWeek}/${file.anio || model.year} · publicados ${new Date(file.creado).toLocaleDateString('es-EC', { day: '2-digit', month: 'short' })}`);
 }
 function showLogin(file) {
@@ -3145,7 +3292,7 @@ function showLogin(file) {
 }
 async function appBoot() {
   document.body.classList.add('app');
-  for (const id of ['bRefresh', 'bConnect', 'bFiles', 'bCsv', 'bApp']) { const b = document.getElementById(id); if (b) b.hidden = true; }
+  for (const id of ['bRefresh', 'bConnect', 'bFiles', 'bCsv', 'bApp', 'bRep', 'bRepS']) { const b = document.getElementById(id); if (b) b.hidden = true; }
   $('#welcome').hidden = true; $('#bLogout').hidden = false;
   $('#bLogout').onclick = () => { try { localStorage.removeItem(SESS); sessionStorage.removeItem(SESS); } catch (e) {} location.reload(); };
   $('#lgFile').onclick = (e) => { e.preventDefault(); $('#lgIn').click(); };
