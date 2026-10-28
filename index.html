@@ -1245,6 +1245,8 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
           cajas1: num(r[c2.c1]), cajas2: num(r[c2.c2]), haSem: num(r[c2.has]), pctSem: num(r[c2.ps]), racHa: num(r[c2.rha]), bhm: num(r[c2.bhm]) });
       }
     }
+    // ratio = cajas ÷ racimos PROCESADOS (el reporte trae cajas ÷ cortados)
+    for (const o of [...Object.values(out.farms), out.total]) { if (!o || !o.proc) continue; const c1 = o.cajas1 || 0, c2 = o.cajas2 || 0; if (c1) { o.ratio = c1 / o.proc; o.ratioT = (c1 + c2) / o.proc; } }
     return out;
   }
 
@@ -2617,12 +2619,13 @@ function mermaW(f, y, w) {
   const racCampo = x && rr != null ? Math.max(0, 0.98 - rr) * x.e : null; const cjCampo = racCampo != null && ratio ? racCampo * ratio : null;
   const sb = siomaBand(f, y, w); const cjSob = sb ? sb.regal : null;
   const usd = { proc: (cjProc || 0) * S.precio, evit: (cjEvit || 0) * S.precio, rech: (cjRech || 0) * S.precio + rech * COSTO_RAC, campo: (cjCampo || 0) * S.precio + (racCampo || 0) * COSTO_RAC, sob: (cjSob || 0) * S.precio };
-  const cjTot = (cjProc || 0) + (cjRech || 0) + (cjCampo || 0) + (cjSob || 0);
+  usd.rechVenta = (cjRech || 0) * S.precio; usd.rechCosto = rech * COSTO_RAC; usd.campoVenta = (cjCampo || 0) * S.precio; usd.campoCosto = (racCampo || 0) * COSTO_RAC;
+  const cjTot = (cjEvit || 0) + (cjRech || 0) + (cjCampo || 0) + (cjSob || 0);
   return { f, y, w, proc, cort, rech, cajas, ratio, peso, m, mSrc, cjProc, cjEvit, cjRech, cohort: x ? { y: cy, w: cw, e: x.e, c: x.c, r: x.r, r4: rr } : null, racCampo, cjCampo, sb, cjSob, cjTot,
-    usd: Object.assign(usd, { tot: usd.proc + usd.rech + usd.campo + usd.sob }), pctCaj: cajas ? cjTot / (cajas + cjTot) : null };
+    usd: Object.assign(usd, { tot: usd.evit + usd.rech + usd.campo + usd.sob }), pctCaj: cajas ? cjTot / (cajas + cjTot) : null };
 }
 function mermaAgg(list) {
-  const o = { proc: 0, cort: 0, rech: 0, cajas: 0, cjProc: 0, cjEvit: 0, cjRech: 0, racCampo: 0, cjCampo: 0, cjSob: 0, cjTot: 0, usd: { proc: 0, evit: 0, rech: 0, campo: 0, sob: 0, tot: 0 }, mX: 0, mN: 0, pX: 0, pN: 0, ce: 0, cc: 0, sbN: 0, sbC: 0, sbB: 0, sbS: 0, sbLb: 0, r4X: 0, r4N: 0, n: 0 };
+  const o = { proc: 0, cort: 0, rech: 0, cajas: 0, cjProc: 0, cjEvit: 0, cjRech: 0, racCampo: 0, cjCampo: 0, cjSob: 0, cjTot: 0, usd: { proc: 0, evit: 0, rech: 0, campo: 0, sob: 0, tot: 0, rechVenta: 0, rechCosto: 0, campoVenta: 0, campoCosto: 0 }, mX: 0, mN: 0, pX: 0, pN: 0, ce: 0, cc: 0, sbN: 0, sbC: 0, sbB: 0, sbS: 0, sbLb: 0, r4X: 0, r4N: 0, n: 0 };
   for (const r of list) { if (!r) continue; o.n++;
     for (const k of ['proc', 'cort', 'rech', 'cajas', 'cjProc', 'cjEvit', 'cjRech', 'racCampo', 'cjCampo', 'cjSob', 'cjTot']) o[k] += r[k] || 0;
     for (const k of Object.keys(o.usd)) o.usd[k] += r.usd[k] || 0;
@@ -2651,7 +2654,7 @@ function rMerma() {
     <td>${a.sbN ? fmt.d1(a.cjSob) : '—'}</td><td><b>${fmt.int(a.cjTot)}</b></td><td>${fmt.p1(a.pctCaj)}</td><td><b>${fmt.usd(a.usd.tot)}</b></td><td>${fmt.d2((f ? haOf(f, y) : haG) ? a.cjTot / (f ? haOf(f, y) : haG) : null)}</td></tr>`;
   const det = G[fSel] || [];
   const top = fs.slice().sort((a, b) => A[b].usd.tot - A[a].usd.tot)[0];
-  const parts = [['Proceso (empacadora)', T.cjProc, T.usd.proc], ['Racimos recusados', T.cjRech, T.usd.rech], ['Campo (recobro < 98%)', T.cjCampo, T.usd.campo], ['Sobrepeso de bandejas (Sioma)', T.cjSob, T.usd.sob]];
+  const parts = [[`Proceso sobre meta ${fmt.p1(mermaMeta())}`, T.cjEvit, T.usd.evit], ['Racimos recusados', T.cjRech, T.usd.rech], ['Campo (recobro < 98%)', T.cjCampo, T.usd.campo], ['Sobrepeso de bandejas (Sioma)', T.cjSob, T.usd.sob]];
   el.innerHTML = `<div class="toolbar"><span class="note">${esc(selName())} · ${y} · S${w1}–S${w2}. Cajas valoradas a $${S.precio.toFixed(2)}; recusados y campo suman además $${COSTO_RAC} de insumos y labores por racimo (funda, corbatín, protector, zuncho, fertilización, enfunde).</span>
     <label class="note">Meta merma proceso <input id="merMeta" type="number" step="0.5" min="0" max="30" value="${(mermaMeta() * 100).toFixed(1)}" style="width:64px"> %</label></div>
   <div class="kpis">
@@ -2666,11 +2669,12 @@ function rMerma() {
     <div class="card"><h3>Cajas perdidas por semana y causa</h3><div class="chart"><canvas id="mm1"></canvas></div></div>
     <div class="card"><h3>Dónde se pierde · ${esc(selName())}</h3><table class="t"><tr><th class="l">Causa</th><th>Cajas</th><th>%</th><th>USD</th></tr>
       ${parts.map((p) => `<tr><td class="l">${p[0]}</td><td>${fmt.int(p[1])}</td><td>${fmt.p1(T.cjTot ? p[1] / T.cjTot : null)}</td><td>${fmt.usd(p[2])}</td></tr>`).join('')}
-      <tr style="font-weight:700"><td class="l">Total</td><td>${fmt.int(T.cjTot)}</td><td>100%</td><td>${fmt.usd(T.usd.tot)}</td></tr></table>
-      <p class="note" style="margin-top:8px">${top ? `<b>${NOM[top]}</b> concentra la mayor pérdida: ${fmt.usd(A[top].usd.tot)} (${fmt.int(A[top].cjTot)} cajas). ` : ''}Proceso = peso que entra a empacadora y no sale en caja (% Rechazo Proceso del reporte semanal; si falta, MERMA de la base Pb9). Campo = racimos de la cohorte enfundada 15 semanas antes que faltan para el 98%, medido con el recobro de las últimas 4 cohortes (así una cinta mal asignada a la semana vecina no infla la pérdida).</p></div>
+      <tr style="font-weight:700"><td class="l">Total pérdida</td><td>${fmt.int(T.cjTot)}</td><td>100%</td><td>${fmt.usd(T.usd.tot)}</td></tr>
+      <tr class="note"><td class="l">Referencia: merma de proceso total (${fmt.p1(T.m)})</td><td>${fmt.int(T.cjProc)}</td><td></td><td>${fmt.usd(T.usd.proc)}</td></tr></table>
+      <p class="note" style="margin-top:8px">${top ? `<b>${NOM[top]}</b> concentra la mayor pérdida: ${fmt.usd(A[top].usd.tot)} (${fmt.int(A[top].cjTot)} cajas). ` : ''}Proceso = peso que entra a empacadora y no sale en caja (% Rechazo Proceso del reporte semanal; si falta, MERMA de la base Pb9). Solo se cuenta como pérdida lo que pasa de la meta: una parte de la merma es normal (dedos cortos, cicatrices, puntas) y otra se vende como segunda. Campo = racimos de la cohorte enfundada 15 semanas antes que faltan para el 98%, medido con el recobro de las últimas 4 cohortes (así una cinta mal asignada a la semana vecina no infla la pérdida).</p></div>
   </div>
   <h2>Merma por hacienda · S${w1}–S${w2}</h2>
-  <div class="card scroll"><table class="t"><tr><th class="l">Hacienda</th><th>Racimos proc.</th><th>Cajas</th><th>Ratio</th><th>Peso kg</th><th>% merma proceso</th><th>Cj perdidas proceso</th><th>Cj evitables</th><th>Recusados</th><th>% rec.</th><th>Cj recusados</th><th>Recobro</th><th>Rac. campo</th><th>Cj campo</th><th>Cj sobrepeso</th><th>Cajas perdidas</th><th>% potencial</th><th>USD</th><th>Cj perd./ha</th></tr>
+  <div class="card scroll"><table class="t"><tr><th class="l">Hacienda</th><th>Racimos proc.</th><th>Cajas</th><th>Ratio</th><th>Peso kg</th><th>% merma proceso</th><th>Cj merma proceso (total)</th><th>Cj sobre meta</th><th>Recusados</th><th>% rec.</th><th>Cj recusados</th><th>Recobro</th><th>Rac. campo</th><th>Cj campo</th><th>Cj sobrepeso</th><th>Cajas perdidas</th><th>% potencial</th><th>USD</th><th>Cj perd./ha</th></tr>
     ${fs.map((f) => rowF(f, A[f])).join('')}${rowF(null, T).replace('<tr>', '<tr style="font-weight:700">')}</table></div>
   <div class="grid" style="margin-top:14px">
     <div class="card"><h3>USD perdidos por hacienda y causa</h3><div class="chart"><canvas id="mm2"></canvas></div></div>
@@ -2698,10 +2702,10 @@ function rMerma() {
   const wk = ws.map((w) => mermaAgg(farms.map((f) => G[f][w - w1])));
   const COLS = ['#ef6c00', '#c62828', '#8e24aa', '#1565c0'];
   chart('mm1', { data: { labels: ws.map((w) => 'S' + w), datasets: [
-    ...[['Proceso', 'cjProc'], ['Recusados', 'cjRech'], ['Campo', 'cjCampo'], ['Sobrepeso', 'cjSob']].map(([l, k], i) => ({ type: 'bar', label: l, data: wk.map((a) => a.n ? a[k] : null), backgroundColor: COLS[i], stack: 's', yAxisID: 'y' })),
+    ...[['Proceso sobre meta', 'cjEvit'], ['Recusados', 'cjRech'], ['Campo', 'cjCampo'], ['Sobrepeso', 'cjSob']].map(([l, k], i) => ({ type: 'bar', label: l, data: wk.map((a) => a.n ? a[k] : null), backgroundColor: COLS[i], stack: 's', yAxisID: 'y' })),
     { type: 'line', label: 'USD', data: wk.map((a) => a.n ? a.usd.tot : null), borderColor: '#1f5130', borderWidth: 2.5, pointRadius: 2, yAxisID: 'y1' }] },
     options: { scales: { x: { stacked: true }, y: { stacked: true, title: { display: true, text: 'cajas' } }, y1: { position: 'right', grid: { display: false }, ticks: { callback: (v) => '$' + Math.round(v).toLocaleString('es-EC') } } } } });
-  chart('mm2', { type: 'bar', data: { labels: fs.map((f) => NOM[f]), datasets: [['Proceso', 'proc'], ['Recusados', 'rech'], ['Campo', 'campo'], ['Sobrepeso', 'sob']].map(([l, k], i) => ({ label: l, data: fs.map((f) => A[f].usd[k]), backgroundColor: COLS[i], stack: 's' })) },
+  chart('mm2', { type: 'bar', data: { labels: fs.map((f) => NOM[f]), datasets: [['Proceso sobre meta', 'evit'], ['Recusados', 'rech'], ['Campo', 'campo'], ['Sobrepeso', 'sob']].map(([l, k], i) => ({ label: l, data: fs.map((f) => A[f].usd[k]), backgroundColor: COLS[i], stack: 's' })) },
     options: { scales: { x: { stacked: true }, y: { stacked: true, ticks: { callback: (v) => '$' + Math.round(v).toLocaleString('es-EC') } } } } });
   chart('mm3', { type: 'line', data: { labels: ws.map((w) => 'S' + w), datasets: [...fs.map((f) => ({ label: NOM[f], data: G[f].map((r) => r?.m ?? null), borderColor: FARM_COL[E.FARMS.indexOf(f)], borderWidth: 1.8, pointRadius: 1.5, spanGaps: true })), refLine('Meta', mermaMeta(), ws.length, '#1f5130')] },
     options: { scales: { y: { ticks: { callback: (v) => (v * 100).toFixed(0) + '%' } } }, plugins: { tooltip: { callbacks: { label: (c) => `${c.dataset.label}: ${(c.raw * 100).toFixed(1)}%` } } } } });
@@ -2788,6 +2792,8 @@ const SUPER = [['Juan Santana', ['PORVENIR', 'PAULITA', 'FRUTA DE PAN']], ['Ing.
 const RED_F = ['SAN JUAN 2', 'TRES MARIAS'];
 const RP = { verde: [21, 107, 77], amar: [245, 197, 24], amarClaro: [255, 242, 0], naranja: [249, 199, 79] };
 const n2 = (v) => (v == null || !isFinite(v) ? '' : v.toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
+const n3 = (v) => (v == null || !isFinite(v) ? '' : v.toLocaleString('es-EC', { minimumFractionDigits: 3, maximumFractionDigits: 3 }));
+const pc1 = (v) => (v == null || !isFinite(v) ? '' : (v * 100).toLocaleString('es-EC', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + '%');
 const n1 = (v) => (v == null || !isFinite(v) ? '' : v.toLocaleString('es-EC', { minimumFractionDigits: 1, maximumFractionDigits: 1 }));
 const n0 = (v) => (v == null || !isFinite(v) ? '' : Math.round(v).toLocaleString('es-EC'));
 const pc2 = (v) => (v == null || !isFinite(v) ? '' : (v * 100).toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + '%');
@@ -2809,7 +2815,14 @@ function chartImg(cfg, w = 1100, h = 500) {
 const barCfg = (labels, data, title, opt = {}) => ({ type: 'bar', data: { labels, datasets: [{ label: opt.label || title, data, backgroundColor: opt.colors || '#4a7ebb', borderRadius: 3, vl: opt.vl || ((v) => n2(v)), vlSize: 15 }, ...(opt.ref != null ? [{ type: 'line', label: opt.refLabel || 'Meta', data: labels.map(() => opt.ref), borderColor: '#d32f2f', borderWidth: 3, pointRadius: 0 }] : [])] },
   options: { plugins: { title: { text: title }, legend: { display: opt.ref != null } }, scales: { x: { ticks: { maxRotation: 35, minRotation: 0 } }, y: { min: opt.min, max: opt.max, beginAtZero: opt.min == null, ticks: opt.yfmt ? { callback: opt.yfmt } : {} } } } });
 // ---------- PDF: utilidades ----------
-function pdfNew(orient = 'p') { const J = window.jspdf && window.jspdf.jsPDF; if (!J) throw new Error('Librería PDF no disponible'); return new J({ orientation: orient, unit: 'pt', format: 'letter' }); }
+const PDF_MAP = { '≥': '>=', '≤': '<=', '→': '->', '←': '<-', '≈': '~', '−': '-', '×': 'x', '÷': '/', '\u00a0': ' ', '\u202f': ' ', '✓': 'OK', '⚠': '!' };
+const pdfTxt = (t) => String(t).replace(/[≥≤→←≈−×÷\u00a0\u202f✓⚠]/g, (c) => PDF_MAP[c] ?? c).replace(/[^\x00-\xff€‚ƒ„…†‡ˆ‰Š‹ŒŽ‘’“”•–—˜™š›œžŸ]/g, '');
+function pdfNew(orient = 'p') { const J = window.jspdf && window.jspdf.jsPDF; if (!J) throw new Error('Librería PDF no disponible'); const doc = new J({ orientation: orient, unit: 'pt', format: 'letter' });
+  // la fuente Helvetica del PDF no tiene ≥, ≤, → …: se convierten antes de escribir (si no, salen letras sueltas e ilegibles)
+  const t0 = doc.text.bind(doc); doc.text = (txt, ...a) => t0(Array.isArray(txt) ? txt.map(pdfTxt) : typeof txt === 'string' ? pdfTxt(txt) : txt, ...a);
+  const w0 = doc.getTextWidth.bind(doc); doc.getTextWidth = (txt) => w0(pdfTxt(txt));
+  const s0 = doc.splitTextToSize.bind(doc); doc.splitTextToSize = (txt, ...a) => s0(typeof txt === 'string' ? pdfTxt(txt) : txt, ...a);
+  return doc; }
 function pdfHeader(doc, I) {
   const W = doc.internal.pageSize.getWidth(); const x = 40, y = 26, w = W - 80, h = 58, wl = w * 0.68;
   doc.setFillColor(...RP.verde); doc.rect(x, y, wl, h, 'F'); doc.setFillColor(255, 255, 255); doc.rect(x + 8, y + 6, 66, h - 12, 'F');
@@ -3030,17 +3043,49 @@ async function buildWeeklyPDF(y, w, onp = () => {}) {
     Y = addImg(doc, I, Y, chartImg(barCfg(lblP, [...vals, tv], `Viesfrut S.A. · ${title} - ${y}`, { min: lo, vl: f })), 470, 190);
     Y = rich(doc, nar(), 60, Y, pageW(doc) - 120, 10, I) + 10;
   }
-  // ===== Merma =====
+  // ===== Merma (detalle) =====
   await tick2('Merma…'); Y = pdfPage(doc, I); Y = secT(doc, `MERMA Y CAJAS PERDIDAS SEMANA ${w}`, Y);
-  const MR = FS.map((f) => mermaW(f, y, w)).filter(Boolean); const MT = mermaAgg(MR);
-  Y = tbl(doc, Y, [['Hacienda', 'Ratio', 'Peso kg', '% Merma proc.', 'Cj proceso', 'Recusados', 'Cj recus.', 'Recobro 4 coh.', 'Rac. campo', 'Cj campo', 'Cj sobrepeso', 'Cajas perdidas', 'USD']],
-    [...MR.map((r) => rowOf([NOM[r.f], n2(r.ratio), n2(r.peso), pc2(r.m), n0(r.cjProc), n0(r.rech), n0(r.cjRech), r.cohort ? pc2(r.cohort.r4) : '', n0(r.racCampo), n0(r.cjCampo), r.sb ? n1(r.cjSob) : '', n0(r.cjTot), fmt.usd(r.usd.tot)], r.f)),
-      rowOf(['Total Viesfrut', n2(MT.ratio), n2(MT.peso), pc2(MT.m), n0(MT.cjProc), n0(MT.rech), n0(MT.cjRech), pc2(MT.rec4), n0(MT.racCampo), n0(MT.cjCampo), MT.sbN ? n1(MT.cjSob) : '', n0(MT.cjTot), fmt.usd(MT.usd.tot)], null, { __tot: 1 })], { fs: 7, left: 36, right: 36, hfs: 6.5 });
-  Y = addImg(doc, I, Y, chartImg({ type: 'bar', data: { labels: MR.map((r) => NOM[r.f]), datasets: [['Proceso', 'cjProc', '#ef6c00'], ['Recusados', 'cjRech', '#c62828'], ['Campo', 'cjCampo', '#8e24aa'], ['Sobrepeso', 'cjSob', '#1565c0']].map(([l, k, c]) => ({ label: l, data: MR.map((r) => r[k] || 0), backgroundColor: c, stack: 's' })) },
-    options: { plugins: { title: { text: `VIESFRUT S.A. · CAJAS PERDIDAS POR CAUSA · SEMANA ${w} - ${y}` } }, scales: { x: { stacked: true }, y: { stacked: true } } } }), 470, 200);
-  const mTop = MR.slice().sort((a, b) => b.usd.tot - a.usd.tot); const mHi = MR.filter((r) => r.m != null).sort((a, b) => b.m - a.m);
+  const MR = FS.map((f) => mermaW(f, y, w)).filter(Boolean); const MT = mermaAgg(MR); const meta = mermaMeta();
+  const usd0 = (v) => (v == null || !isFinite(v) ? '' : '$' + Math.round(v).toLocaleString('es-EC'));
+  const RS = recSummary(FS, y, w, w);
+  doc.setFontSize(8.5); doc.setTextColor(90);
+  Y = rich(doc, `Ratio = cajas ÷ racimos procesados. Cajas valoradas a $${S.precio.toFixed(2)}; cada racimo perdido en campo o recusado suma además $${COSTO_RAC} de insumos y labores ya invertidos (funda $0.07, corbatín $0.01, protector $0.0475, zuncho $0.1725, fertilización $0.3487, labor de enfunde $0.0071).`, 40, Y, pageW(doc) - 80, 8.5, I) + 4; doc.setTextColor(0);
+  // 1. Proceso
+  Y = secT(doc, `1. Merma de proceso en empacadora · meta ${pc2(meta)}`, Y);
+  Y = tbl(doc, Y, [['Hacienda', 'Rac. procesados', 'Peso racimo kg', 'Cajas producidas', 'Ratio', '% Merma', 'Cajas merma total', 'USD merma total', 'Cajas sobre meta', 'USD sobre meta']],
+    [...MR.map((r) => rowOf([NOM[r.f], n0(r.proc), n2(r.peso), n0(r.cajas), n2(r.ratio), r.m == null ? 's/d' : pc2(r.m), r.m == null ? '' : n0(r.cjProc), r.m == null ? '' : usd0(r.usd.proc), r.m == null ? '' : n0(r.cjEvit), r.m == null ? '' : usd0(r.usd.evit)], r.f)),
+      rowOf(['Total Viesfrut', n0(MT.proc), n2(MT.peso), n0(MT.cajas), n2(MT.ratio), pc2(MT.m), n0(MT.cjProc), usd0(MT.usd.proc), n0(MT.cjEvit), usd0(MT.usd.evit)], null, { __tot: 1 })],
+    { fs: 7, hfs: 6.5, left: 36, right: 36, cell: (d) => { if (d.column.index === 5 && d.row.index < MR.length) { const m = MR[d.row.index].m; if (m != null) d.cell.styles.fillColor = m > meta + 0.04 ? [244, 199, 195] : m > meta ? [255, 236, 179] : [200, 230, 201]; } } });
+  // 2. Recusados
+  Y = need(doc, I, Y, 120); Y = secT(doc, '2. Racimos recusados', Y);
+  Y = tbl(doc, Y, [['Hacienda', 'Rac. cortados', 'Recusados', '% Recusado', 'Ratio', 'Cajas perdidas', 'Venta perdida', 'Costo insumos', 'USD total', 'Motivo principal']],
+    [...MR.map((r) => { const b = RS.byFarm[r.f]; const td = b ? Object.keys(b.d).sort((p, q) => b.d[q] - b.d[p])[0] : null; return rowOf([NOM[r.f], n0(r.cort), n0(r.rech), pc2(r.cort ? r.rech / r.cort : null), n2(r.ratio), n0(r.cjRech), usd0(r.usd.rechVenta), usd0(r.usd.rechCosto), usd0(r.usd.rech), td ? `${td} (${b.d[td]})` : '']); }),
+      rowOf(['Total Viesfrut', n0(MT.cort), n0(MT.rech), pc2(MT.recPct), n2(MT.ratio), n0(MT.cjRech), usd0(MT.usd.rechVenta), usd0(MT.usd.rechCosto), usd0(MT.usd.rech), RS.defs[0] ? `${RS.defs[0]} (${RS.byDef[RS.defs[0]]})` : ''], null, { __tot: 1 })],
+    { fs: 7, hfs: 6.5, left: 36, right: 36, cols: { 0: { halign: 'left' }, 9: { halign: 'left' } } });
+  // 3. Campo
+  Y = need(doc, I, Y, 120); Y = secT(doc, '3. Pérdida en campo (recobro de cinta bajo 98%)', Y);
+  Y = tbl(doc, Y, [['Hacienda', 'Cinta (enfunde)', 'Enfundados', 'Cosechados', 'Recobro cinta', 'Recobro 4 cintas', 'Racimos bajo 98%', 'Cajas perdidas', 'Venta perdida', 'Costo insumos', 'USD total']],
+    [...MR.map((r) => rowOf([NOM[r.f], r.cohort ? `S${r.cohort.w}${r.cohort.y !== y ? '/' + r.cohort.y : ''}${weekColor(r.cohort.y, r.cohort.w) ? ' ' + (E.COLORES[weekColor(r.cohort.y, r.cohort.w)] || '') : ''}` : '', n0(r.cohort?.e), n0(r.cohort?.c), pc2(r.cohort?.r), pc2(r.cohort?.r4), n0(r.racCampo), n0(r.cjCampo), usd0(r.usd.campoVenta), usd0(r.usd.campoCosto), usd0(r.usd.campo)], r.f)),
+      rowOf(['Total Viesfrut', '', n0(MT.ce), n0(MT.cc), pc2(MT.rec), pc2(MT.rec4), n0(MT.racCampo), n0(MT.cjCampo), usd0(MT.usd.campoVenta), usd0(MT.usd.campoCosto), usd0(MT.usd.campo)], null, { __tot: 1 })],
+    { fs: 7, hfs: 6.5, left: 36, right: 36 });
+  doc.setFontSize(7.5); doc.setTextColor(110); doc.text('La pérdida se mide con el recobro de las últimas 4 cintas, para que una cinta registrada en la semana vecina no infle el valor; sobre 102% es error de registro de fundas.', 36, Y - 6); doc.setTextColor(0); Y += 6;
+  // 4. Sioma
   const sbR = MR.filter((r) => r.sb);
-  Y = rich(doc, `La semana ${w} dejó **${n0(MT.cjTot)} cajas perdidas (${pc2(MT.pctCaj)} de la producción potencial), valoradas en ${fmt.usd(MT.usd.tot)}** a $${S.precio.toFixed(2)}/caja más $${COSTO_RAC} de insumos por racimo perdido: proceso ${n0(MT.cjProc)} cj (${fmt.usd(MT.usd.proc)}), recusados ${n0(MT.cjRech)} cj (${fmt.usd(MT.usd.rech)}), campo ${n0(MT.cjCampo)} cj (${fmt.usd(MT.usd.campo)})${MT.sbN ? ` y sobrepeso de bandejas ${n1(MT.cjSob)} cj (${fmt.usd(MT.usd.sob)})` : ''}.\n\n**Merma de proceso más alta:** ${mHi.slice(0, 3).map((r) => `${NOM[r.f]} ${pc2(r.m)}`).join(', ')} (meta ${pc2(mermaMeta())}; ${n0(MT.cjEvit)} cajas evitables sobre la meta). **Mayor pérdida en dinero:** ${mTop.slice(0, 3).map((r) => `${NOM[r.f]} ${fmt.usd(r.usd.tot)}`).join(', ')}.${sbR.length ? `\n\n**Peso de bandejas (Sioma):** ${sbR.map((r) => `${NOM[r.f]} ${pc2(r.sb.cor / 100)} correctas, ${pc2(r.sb.bajo / 100)} bajo peso, ${pc2(r.sb.sobre / 100)} sobrepeso (${n1(r.sb.regal)} cj regaladas)`).join('; ')}.` : ''}`, 60, Y, pageW(doc) - 120, 10, I);
+  if (sbR.length) { Y = need(doc, I, Y, 110); Y = secT(doc, `4. Peso de bandejas · Sioma (semana ISO ${w})`, Y);
+    Y = tbl(doc, Y, [['Finca', 'Bandejas', 'Correctas', 'Bajo peso', 'Sobrepeso', 'Sobrepeso prom. lb/bandeja', 'Cajas regaladas', 'USD']],
+      [...sbR.map((r) => rowOf([NOM[r.f], n0(r.sb.caj), pc1(r.sb.cor / 100), pc1(r.sb.bajo / 100), pc1(r.sb.sobre / 100), n3(r.sb.sbLb), n1(r.sb.regal), usd0(r.usd.sob)])),
+        rowOf(['Total', n0(MT.sbN), pc1(MT.sbC / MT.sbN), pc1(MT.sbB / MT.sbN), pc1(MT.sbS / MT.sbN), n3(MT.sbLb / MT.sbN), n1(MT.cjSob), usd0(MT.usd.sob)], null, { __tot: 1 })],
+      { fs: 7.5, left: 60, right: 60, cell: (d) => { if (d.row.index >= sbR.length) return; const r = sbR[d.row.index].sb; if (d.column.index === 2) d.cell.styles.fillColor = r.cor >= 95 ? [200, 230, 201] : r.cor >= 90 ? [255, 236, 179] : [244, 199, 195]; if (d.column.index === 3 && r.bajo > 2) d.cell.styles.textColor = [200, 0, 0]; } });
+    doc.setFontSize(7.5); doc.setTextColor(110); doc.text(`Fincas sin báscula Sioma: ${FS.filter((f) => !sbR.some((r) => r.f === f)).map((f) => NOM[f]).join(', ')}.${MR.some((r) => r.m == null) ? ` s/d = sin dato de merma de proceso (${MR.filter((r) => r.m == null).map((r) => NOM[r.f]).join(', ')}).` : ''}`, 60, Y - 6); doc.setTextColor(0); Y += 4; }
+  // 5. Resumen
+  Y = pdfPage(doc, I); Y = secT(doc, `RESUMEN DE CAJAS PERDIDAS SEMANA ${w}`, Y);
+  Y = tbl(doc, Y, [['Hacienda', 'Cajas producidas', 'Proceso sobre meta', 'Recusados', 'Campo', 'Sobrepeso', 'Cajas perdidas', '% del potencial', 'USD perdidos']],
+    [...MR.map((r) => rowOf([NOM[r.f], n0(r.cajas), r.m == null ? 's/d' : n0(r.cjEvit), n0(r.cjRech), n0(r.cjCampo), r.sb ? n1(r.cjSob) : '', n0(r.cjTot), pc2(r.pctCaj), usd0(r.usd.tot)], r.f)),
+      rowOf(['Total Viesfrut', n0(MT.cajas), n0(MT.cjEvit), n0(MT.cjRech), n0(MT.cjCampo), MT.sbN ? n1(MT.cjSob) : '', n0(MT.cjTot), pc2(MT.pctCaj), usd0(MT.usd.tot)], null, { __tot: 1 })], { fs: 7.5, left: 40, right: 40 });
+  Y = addImg(doc, I, Y, chartImg({ type: 'bar', data: { labels: MR.map((r) => NOM[r.f]), datasets: [['Proceso sobre meta', 'cjEvit', '#ef6c00'], ['Recusados', 'cjRech', '#c62828'], ['Campo', 'cjCampo', '#8e24aa'], ['Sobrepeso', 'cjSob', '#1565c0']].map(([l, k, c]) => ({ label: l, data: MR.map((r) => r[k] || 0), backgroundColor: c, stack: 's' })) },
+    options: { plugins: { title: { text: `VIESFRUT S.A. · CAJAS PERDIDAS POR CAUSA · SEMANA ${w} - ${y}` } }, scales: { x: { stacked: true }, y: { stacked: true } } } }), 470, 190);
+  const mTop = MR.slice().sort((a, b) => b.usd.tot - a.usd.tot); const mHi = MR.filter((r) => r.m != null).sort((a, b) => b.m - a.m);
+  Y = rich(doc, `La semana ${w} dejó **${n0(MT.cjTot)} cajas perdidas (${pc2(MT.pctCaj)} de la producción potencial), valoradas en ${usd0(MT.usd.tot)}**: proceso sobre la meta ${n0(MT.cjEvit)} cj (${usd0(MT.usd.evit)}), recusados ${n0(MT.cjRech)} cj (${usd0(MT.usd.rech)}), campo ${n0(MT.cjCampo)} cj (${usd0(MT.usd.campo)})${MT.sbN ? ` y sobrepeso de bandejas ${n1(MT.cjSob)} cj (${usd0(MT.usd.sob)})` : ''}.\n\n**¿Por qué la merma de proceso pesa tanto?** El reporte semanal marca un rechazo de proceso de **${pc2(MT.m)}**: de cada 100 kg de fruta que entra a la empacadora, ${n1((MT.m || 0) * 100)} kg no salen en caja de primera. Sobre ${n0(MT.cajas)} cajas producidas, eso equivale a ${n0(MT.cjProc)} cajas (${usd0(MT.usd.proc)} a precio oficial). No todo es pérdida: una parte es normal (dedos cortos, cicatrices, puntas) y otra se vende como segunda o fruta nacional. Por eso **solo se cuenta como pérdida lo que pasa de la meta de ${pc2(meta)}: ${n0(MT.cjEvit)} cajas**.\n\n**Merma de proceso más alta:** ${mHi.slice(0, 3).map((r) => `${NOM[r.f]} ${pc2(r.m)} (${n0(r.cjEvit)} cj sobre meta)`).join(', ')}. **Mayor pérdida total:** ${mTop.slice(0, 3).map((r) => `${NOM[r.f]} ${usd0(r.usd.tot)}`).join(', ')}.${sbR.length ? `\n\n**Peso de bandejas (Sioma):** ${sbR.filter((r) => r.sb.bajo > 2).map((r) => `${NOM[r.f]} con ${pc1(r.sb.bajo / 100)} de bandejas con bajo peso`).join(' y ') || 'ninguna finca pasa de 2% de bandejas con bajo peso'}${sbR.some((r) => r.sb.bajo > 2) ? ' (riesgo de reclamo del exportador)' : ''}; el sobrepeso regaló ${n1(MT.cjSob)} cajas.` : ''}`, 60, Y, pageW(doc) - 120, 10, I);
   // ===== Semáforo y acciones =====
   await tick2('Semáforo y acciones…'); Y = pdfPage(doc, I); Y = secT(doc, `SEMÁFORO POR HACIENDA Y 3 ACCIONES CORRECTIVAS · SEMANA ${w}`, Y);
   const st = FS.map((f) => farmStatus(f, w));
