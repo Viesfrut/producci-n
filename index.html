@@ -40,6 +40,9 @@ button:disabled{opacity:.55;cursor:wait}
 .filters label{display:flex;flex-direction:column;font-size:11px;color:var(--muted);gap:3px;text-transform:uppercase;letter-spacing:.3px}
 .filters select,.filters input{font:inherit;font-size:13px;padding:5px 8px;border:1px solid var(--line);border-radius:7px;background:#fff;color:var(--fg);min-width:70px}
 .chips{display:flex;flex-wrap:wrap;gap:4px}
+.chips button{padding:6px 11px;border-radius:999px;border:1px solid var(--line);background:#fff;color:var(--ink,#1d2a22);font-weight:600;cursor:pointer}
+.chips button.on{background:var(--verde);color:#fff;border-color:var(--verde)}
+button.sec{background:#fff;color:var(--verde);border:1px solid var(--verde)}
 .chip{display:inline-flex;align-items:center;gap:4px;border:1px solid var(--line);border-radius:999px;padding:3px 9px;font-size:12px;cursor:pointer;user-select:none;background:#fff;color:var(--fg);text-transform:none;letter-spacing:0}
 .chip input{margin:0}
 .filters label.chip input{min-width:0;padding:0;width:auto}
@@ -169,6 +172,7 @@ td.bg-ROJO{background:var(--rojo2)!important}td.bg-AMARILLO{background:var(--amb
     <button class="ghost" id="bCsv">⬇ CSV tabla maestra</button>
     <button class="ghost" id="bRep" title="Informe semanal de producción en PDF">📄 Informe semanal</button>
     <button class="ghost" id="bRepS" title="Informe de control Sigatoka en PDF">🍃 Informe Sigatoka</button>
+    <button class="ghost" id="bRepP" title="Informe de período (4 semanas) para Gerencia General en PDF">📊 Informe de período</button>
     <button class="ghost" id="bApp" title="Usuarios y publicación de la app para celular">📲 App</button>
     <button class="ghost" id="bLogout" hidden>Salir</button>
     <button class="ghost ftoggle" id="bFilt">⚙ Filtros</button>
@@ -192,6 +196,7 @@ td.bg-ROJO{background:var(--rojo2)!important}td.bg-AMARILLO{background:var(--amb
 
 <nav class="tabs" id="tabs">
   <button data-t="resumen" class="on">Resumen ejecutivo</button>
+  <button data-t="infper">Informe de período</button>
   <button data-t="cajas">Cajas</button>
   <button data-t="enfunde">Enfunde</button>
   <button data-t="per">Comparativo por periodo</button>
@@ -216,6 +221,7 @@ td.bg-ROJO{background:var(--rojo2)!important}td.bg-AMARILLO{background:var(--amb
   </div>
 
   <section class="tab on" id="t-resumen"></section>
+  <section class="tab" id="t-infper"></section>
   <section class="tab" id="t-cajas"></section>
   <section class="tab" id="t-enfunde"></section>
   <section class="tab" id="t-per"></section>
@@ -721,7 +727,7 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
     { key: 'sigHist', label: 'Sigatoka histórico (por año)', re: /^(graficos[\s_]*sigatoka|fumigacion[\s_]*aerea).*20\d\d\.xls/i, multi: true },
     { key: 'recus', label: 'Racimos recusados por lote', re: /^parametros[\s_]*recusados/i, sheets: (n) => n.filter((s) => /^(base1|lotes)$/i.test(s)) },
     { key: 'enfLote', label: 'Enfunde por lote (por año)', re: /^enfunde[\s_]*viesfrut[\s_]*20\d\d\.xls/i, multi: true },
-    { key: 'pdSem', label: 'Reporte de producción semanal', re: /^reporte[\s_]*de[\s_]*produccion[\s_]*semana[\s_]*\d+/i, multi: true, limit: 2,
+    { key: 'pdSem', label: 'Reporte de producción semanal', re: /^reporte[\s_]*de[\s_]*produccion[\s_]*semana[\s_]*\d+/i, multi: true, limit: 60,
       mkey: (n) => { const m = n.match(/semana[\s_]*(\d+)[\s_]*(20\d\d)?/i); return m ? (+(m[2] || 0) * 100 + +m[1]) : 0; }, sheets: (n) => n.filter((s) => /^semana$/i.test(s)) },
     { key: 'llaves', label: 'Llaves de la app', re: /^llaves[_\s-]*app.*\.json$/i, json: true, optional: true },
   ];
@@ -1305,7 +1311,7 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
     M.enfLote = {};
     if (books.enfLote) for (const [y, wb] of Object.entries(books.enfLote)) { try { M.enfLote[y] = parseEnfLote(wb); } catch (e) { M.errors.push(`enfunde por lote ${y}: ${e.message}`); } }
     M.pdSem = {};
-    if (books.pdSem) for (const [k, wb] of Object.entries(books.pdSem)) { try { const r = parsePdSem(wb); if (r && r.sem) M.pdSem[(r.anio || Math.floor(k / 100)) * 100 + r.sem] = r; } catch (e) { M.errors.push(`reporte semanal ${k}: ${e.message}`); } }
+    if (books.pdSem) for (const [k, wb] of Object.entries(books.pdSem)) { try { const r = parsePdSem(wb); if (r && r.sem) { const kk = +k > 200000 ? +k : (r.anio || Math.floor(k / 100)) * 100 + r.sem; r.anio = Math.floor(kk / 100); r.sem = kk % 100; M.pdSem[kk] = r; } } catch (e) { M.errors.push(`reporte semanal ${k}: ${e.message}`); } }
     const P = safe('prod', parseProd) || { prod: {}, cohort: {}, pesoEdad: {} }; M.prod = P.prod; M.cohort = P.cohort; M.pesoEdad = P.pesoEdad || {};
     M.sioma = books.sioma || null;
     const FP = safe('fertProg', parseFertProg) || { programa: {}, entregas: {} }; M.fertProg = FP.programa; M.entregas = FP.entregas;
@@ -1594,9 +1600,9 @@ const absW = (y, w) => Math.round(E.weekStart(y, w) / WK);
 const curAbs = () => absW(M.year, M.lastWeek);
 function escCohort(f, y, w) { return escIndex()[f]?.[y + '-' + w] || null; }
 function escState(y, w) { const d = curAbs() - absW(y, w); return d >= 15 ? 'completa' : d >= 9 ? 'en cosecha' : 'pendiente'; }
-function cohortRec(farms, y, w) {
+function cohortRec(farms, y, w, anyEsc) {
   let e = 0, c = 0, src = 'base';
-  const esc = hasEsc() && escState(y, w) === 'completa' ? farms.map((f) => escCohort(f, y, w)) : [];
+  const esc = hasEsc() && (anyEsc || escState(y, w) === 'completa') ? farms.map((f) => escCohort(f, y, w)) : [];
   if (esc.length && esc.some((x) => x && x.enf)) {
     for (const x of esc) if (x && x.enf) { e += x.enf; c += x.totRec || 0; } src = 'escalera';
   } else for (const f of farms) { const en = M.enfunde?.[f]?.[y]?.w?.[w]; if (!en) continue; e += en; c += M.cohort?.[f]?.[y]?.[w] || 0; }
@@ -1726,6 +1732,7 @@ function bindFilters() {
   $('#bApp').onclick = openAppPanel;
   $('#bRep').onclick = () => (M && !$('#bRep').hidden ? openReportPanel('prod') : null);
   $('#bRepS').onclick = () => (M ? openReportPanel('sig') : null);
+  if ($('#bRepP')) $('#bRepP').onclick = () => (M ? openReportPanel('per') : null);
   $('#bFilt').onclick = () => $('#filters').classList.toggle('open');
   $('#appPanel').onclick = (e) => { if (e.target.id === 'appPanel') $('#appPanel').hidden = true; };
   $('#inDir').onchange = (e) => fromInput([...e.target.files]);
@@ -1736,7 +1743,7 @@ function renderAll() { showTab(); rendered.clear(); renderTab(S.tab); }
 const rendered = new Set();
 function renderTab(t) {
   if (!M) return;
-  const fn = { resumen: rResumen, cajas: () => rHist('cajas'), enfunde: () => rHist('enfunde'), recus: rRecus, enflote: rEnfLote, esc: rEsc, per: rPer, peso: rPeso, prod: rProd, sig: rSig, lluvia: rLluvia, fert: rFert, lab: rLab, maestra: rMaestra, calidad: rCalidad, merma: rMerma }[t];
+  const fn = { resumen: rResumen, cajas: () => rHist('cajas'), enfunde: () => rHist('enfunde'), recus: rRecus, enflote: rEnfLote, esc: rEsc, per: rPer, peso: rPeso, prod: rProd, sig: rSig, lluvia: rLluvia, fert: rFert, lab: rLab, maestra: rMaestra, calidad: rCalidad, merma: rMerma, infper: rInfPer }[t];
   try { fn(); } catch (e) { document.getElementById('t-' + t).innerHTML = `<div class="card c-ROJO">Error al dibujar: ${esc(e.message)}</div>`; console.error(e); }
 }
 const W = () => (S.year === M.year ? Math.min(S.w2, M.lastWeek) : S.w2);
@@ -2829,7 +2836,7 @@ function pdfHeader(doc, I) {
   try { doc.addImage(LOGO, 'JPEG', x + 10, y + 7, 62, (h - 14)); } catch (e) {}
   doc.setTextColor(242, 194, 0); doc.setFont('helvetica', 'bold'); doc.setFontSize(10.5); doc.text(I.titulo || 'INFORME SEMANAL DE PRODUCCIÓN BANANERA', x + 88, y + h - 10);
   doc.setFillColor(...RP.amar); doc.rect(x + wl, y, w - wl, h, 'F'); doc.setDrawColor(0); doc.setLineWidth(0.8); doc.rect(x, y, w, h);
-  doc.setTextColor(0); doc.setFontSize(9.5); doc.text(`SEMANA: ${I.sem}   |  AÑO: ${I.anio}`, x + wl + (w - wl) / 2, y + 20, { align: 'center' }); doc.setFontSize(8.5); doc.text(`PERÍODO: ${I.per}`, x + wl + (w - wl) / 2, y + 40, { align: 'center' });
+  doc.setTextColor(0); doc.setFontSize(9.5); doc.text(I.top || `SEMANA: ${I.sem}   |  AÑO: ${I.anio}`, x + wl + (w - wl) / 2, y + 20, { align: 'center' }); doc.setFontSize(8.5); doc.text(I.bot || `PERÍODO: ${I.per}`, x + wl + (w - wl) / 2, y + 40, { align: 'center' });
   doc.setTextColor(0); doc.setFont('helvetica', 'normal'); return y + h + 22;
 }
 function pdfPage(doc, I, orient) { doc.addPage('letter', orient || 'p'); return pdfHeader(doc, I); }
@@ -3012,11 +3019,11 @@ async function buildWeeklyPDF(y, w, onp = () => {}) {
   Y = rich(doc, `El acumulado a la semana ${w} muestra que **${y} supera a ${y - 1} en ${up.length} fincas y está por debajo en ${dn.length}**${dn.length ? ', con diferencias en las fincas deficitarias:' : '.'}\n${dn.map((x) => `• **${NOM[x.f]}**: ${n0(x.a)} mm (${y}) vs ${n0(x.b)} mm (${y - 1}) — diferencia de ${n0(x.b - x.a)} mm`).join('\n')}\n\n${up.length ? `En contraste, ${up.map((x) => `${NOM[x.f]} (+${n0(x.a - x.b)} mm)`).join(', ')} acumulan más lluvia que en ${y - 1}.` : ''}${nb.length ? ` ${nb.map((x) => `${NOM[x.f]} registra ${n0(x.a)} mm`).join(', ')} sin dato comparativo de ${y - 1}.` : ''} Lluvia de la semana ${w}: ${fL.map((f) => `${NOM[f]} ${n0(lluvia(f, y, w))} mm`).join(', ')}.`, 60, Y, pageW(doc) - 120, 10.5, I);
   // ===== Recobro =====
   await tick2('Recobro…'); Y = pdfPage(doc, I); Y = secT(doc, `RECOBRO SEMANA ${w}`, Y);
-  const cw = w - 15; const colr = weekColor(y, cw); const rc = FS.map((f) => ({ f, x: cohortRec([f], y, cw) })).filter((o) => o.x);
-  const rG = cohortRec(rc.map((o) => o.f), y, cw);
+  const cw = w - 13; const colr = weekColor(y, cw); const rc = FS.map((f) => ({ f, x: cohortRec([f], y, cw, true) })).filter((o) => o.x);
+  const rG = cohortRec(rc.map((o) => o.f), y, cw, true);
   Y = addImg(doc, I, Y, chartImg(barCfg(rc.map((o) => NOM[o.f]), rc.map((o) => o.x.r * 100), `Viesfrut S.A. · Recobro de cinta ${colr ? (E.COLORES[colr] || colr) : ''} (enfunde S${cw}) semana ${w} - ${y}`, { vl: (v) => n2(v), ref: 98, refLabel: 'Meta 98%', min: Math.max(0, Math.floor(Math.min(...rc.map((o) => o.x.r * 100), 98) / 10) * 10 - 10) })), 470, 220);
   const ab = rc.filter((o) => o.x.r >= 0.98).sort((a, b) => b.x.r - a.x.r), be = rc.filter((o) => o.x.r < 0.98).sort((a, b) => b.x.r - a.x.r);
-  Y = rich(doc, `Este indicador refleja el control de enfunde y recuperación de cintas (cohorte enfundada en la semana ${cw}, ya completa a 15 semanas). El consolidado cerró en **${pc2(rG?.r)}** con línea de referencia en **98%**. ${ab.length} fincas están en o por encima de la meta:\n\n**Por encima del umbral**\n${ab.map((o) => `• ${NOM[o.f]}: ${pc2(o.x.r)}`).join('\n') || '• Ninguna'}\n\n**Por debajo del umbral**\n${be.map((o) => `• ${NOM[o.f]}: ${pc2(o.x.r)} (${n0(o.x.e - o.x.c)} racimos sin recuperar)`).join('\n') || '• Ninguna'}\n\nRecobro sobre 102% indica error de registro de fundas; bajo 95%, revisar conteo de cuculas y racimos sin cinta.`, 60, Y, pageW(doc) - 120, 10.5, I);
+  Y = rich(doc, `Este indicador refleja el control de enfunde y recuperación de cintas (cinta enfundada en la semana ${cw}, a 13 semanas del enfunde). El consolidado cerró en **${pc2(rG?.r)}** con línea de referencia en **98%**. ${ab.length} fincas están en o por encima de la meta:\n\n**Por encima del umbral**\n${ab.map((o) => `• ${NOM[o.f]}: ${pc2(o.x.r)}`).join('\n') || '• Ninguna'}\n\n**Por debajo del umbral**\n${be.map((o) => `• ${NOM[o.f]}: ${pc2(o.x.r)} (${n0(o.x.e - o.x.c)} racimos sin recuperar)`).join('\n') || '• Ninguna'}\n\nRecobro sobre 102% indica error de registro de fundas; bajo 95%, revisar conteo de cuculas y racimos sin cinta.`, 60, Y, pageW(doc) - 120, 10.5, I);
   // ===== Parámetros por finca (gráficos) =====
   await tick2('Ratio, peso y calibración…');
   const pdW = (k) => PF.map((x) => x[k]); const lblP = [...PF.map((x) => NOM[x.f]), 'Total Viesfrut'];
@@ -3102,6 +3109,370 @@ async function buildWeeklyPDF(y, w, onp = () => {}) {
   return doc;
 }
 
+// ===================== INFORME DE PERÍODO (4 semanas) Y TEXTOS PARA CORREO =====================
+// Períodos de 4 semanas: P1 = S1–S4 … P13 = S49–S52 (la semana 53, si existe, va con el P13)
+const IS_ADMIN = () => !window.VF_APP_USER || window.VF_APP_USER === 'alfonso';
+function perWeeks(y, p) { const a = (p - 1) * 4 + 1; let b = p === 13 ? 53 : p * 4; if (y === M.year) b = Math.min(b, M.lastWeek); return b >= a ? range(a, b) : []; }
+function perOfWeek(w) { return Math.min(13, Math.ceil(w / 4)); }
+const perPrev = (y, p) => (p > 1 ? [y, p - 1] : [y - 1, 13]);
+const perLbl = (y, p) => `P${p}${y !== M.year ? '-' + y : ''}`;
+const LABS3 = ['maleza', 'seleccion', 'limpieza'];
+
+function perFarm(f, y, ws) {
+  const o = { f, y, ws, n: 0, cajas: 0, enf: 0, cort: 0, rech: 0, proc: 0, pX: 0, pN: 0, csX: 0, csN: 0, caX: 0, caN: 0, mnX: 0, mnN: 0, ddX: 0, ddN: 0, diX: 0, diN: 0, edX: 0, edN: 0,
+    mX: 0, mN: 0, dsX: 0, dsN: 0, ce: 0, cc: 0, ll: 0, llN: 0, sg: {}, sgN: {}, lab: {}, cjEvit: 0, cjProc: 0, cjRech: 0, cjCampo: 0, cjSob: 0, racCampo: 0, usd: 0, usdProc: 0, cajasM: 0 };
+  for (const lab of LABS3) o.lab[lab] = { p: 0, r: 0 };
+  for (const w of ws) {
+    const c = weekVal('cajas', f, y, w); if (c) o.cajas += c; const e = weekVal('enfunde', f, y, w); if (e) o.enf += e;
+    const p = prodFarm(f, y, w);
+    if (p && (p.cort || p.proc)) { o.n++; o.cort += p.cort || 0; o.rech += p.rech || 0; o.proc += p.proc || 0; const wt = p.proc || p.cort || 1;
+      if (p.peso) { o.pX += p.peso * wt; o.pN += wt; } if (p.calSub) { o.csX += p.calSub * wt; o.csN += wt; } if (p.calApi) { o.caX += p.calApi * wt; o.caN += wt; }
+      if (p.manos) { o.mnX += p.manos * wt; o.mnN += wt; } if (p.dedo) { o.ddX += p.dedo * wt; o.ddN += wt; } if (p.dias) { o.diX += p.dias * wt; o.diN += wt; }
+      if (p.edadProm) { o.edX += p.edadProm * wt; o.edN += wt; } if (p.desp != null && p.desp > 0) { o.dsX += p.desp * wt; o.dsN += wt; } }
+    const m = mermaW(f, y, w);
+    if (m) { if (m.m != null) { o.mX += m.m * m.proc; o.mN += m.proc; o.cajasM += m.cajas; } o.cjEvit += m.cjEvit || 0; o.cjProc += m.cjProc || 0; o.cjRech += m.cjRech || 0; o.cjCampo += m.cjCampo || 0; o.racCampo += m.racCampo || 0; o.cjSob += m.cjSob || 0; o.usd += m.usd.tot || 0; o.usdProc += m.usd.proc || 0; }
+    let cy = y, cw = w - 15; if (cw <= 0) { cy -= 1; cw += 52; } const x = cohortRec([f], cy, cw); if (x) { o.ce += x.e; o.cc += x.c; }
+    const l = lluvia(f, y, w); if (l != null) { o.ll += l; o.llN++; }
+    const s = M.sigY?.[y]?.[f]?.[w]; if (s) for (const k of ['yls', 'ylws', 'ii', 'pct4', 'ef', 'ii10']) if (s[k] != null) { o.sg[k] = (o.sg[k] || 0) + s[k]; o.sgN[k] = (o.sgN[k] || 0) + 1; }
+    for (const lab of LABS3) for (const r of (M.labores2?.[lab] || [])) if (r.farm === f && r.y === y && r.w === w) { o.lab[lab].p += r.prog || 0; o.lab[lab].r += r.real || 0; }
+  }
+  return perFinish(o, haOf(f, y));
+}
+function perFinish(o, ha) {
+  o.ha = ha; const q = (a, b) => (b ? a / b : null);
+  Object.assign(o, { cjHa: o.cajas && ha ? o.cajas / ha : null, enfHa: o.enf && ha ? o.enf / ha : null, ratio: q(o.cajas, o.proc), peso: q(o.pX, o.pN), calSub: q(o.csX, o.csN), calApi: q(o.caX, o.caN),
+    manos: q(o.mnX, o.mnN), dedo: q(o.ddX, o.ddN), dias: q(o.diX, o.diN), edad: q(o.edX, o.edN), merma: q(o.mX, o.mN), desp: q(o.dsX, o.dsN), recPct: q(o.rech, o.cort), recobro: q(o.cc, o.ce),
+    lluvia: o.llN ? o.ll : null, cjTot: o.cjEvit + o.cjRech + o.cjCampo + o.cjSob });
+  o.sig = {}; for (const k of Object.keys(o.sg)) o.sig[k] = o.sg[k] / o.sgN[k];
+  for (const lab of LABS3) o.lab[lab].pct = o.lab[lab].p ? o.lab[lab].r / o.lab[lab].p : null;
+  if (!o.ratio || o.ratio > 1.3) o.ratio = o.ratio > 1.3 ? null : o.ratio;
+  return o;
+}
+function perGroup(list, name) {
+  const o = { name, n: 0, ha: 0, cajas: 0, enf: 0, cort: 0, rech: 0, proc: 0, pX: 0, pN: 0, csX: 0, csN: 0, caX: 0, caN: 0, mnX: 0, mnN: 0, ddX: 0, ddN: 0, diX: 0, diN: 0, edX: 0, edN: 0, mX: 0, mN: 0, dsX: 0, dsN: 0, ce: 0, cc: 0,
+    cjEvit: 0, cjProc: 0, cjRech: 0, cjCampo: 0, cjSob: 0, racCampo: 0, usd: 0, usdProc: 0, cajasM: 0, lab: {}, sg: {}, sgN: {} };
+  for (const lab of LABS3) o.lab[lab] = { p: 0, r: 0 };
+  let llX = 0, llH = 0, haC = 0, haE = 0;
+  for (const x of list) { if (!x) continue;
+    for (const k of ['cajas', 'enf', 'cort', 'rech', 'proc', 'pX', 'pN', 'csX', 'csN', 'caX', 'caN', 'mnX', 'mnN', 'ddX', 'ddN', 'diX', 'diN', 'edX', 'edN', 'mX', 'mN', 'dsX', 'dsN', 'ce', 'cc', 'cjEvit', 'cjProc', 'cjRech', 'cjCampo', 'cjSob', 'racCampo', 'usd', 'usdProc', 'cajasM']) o[k] += x[k] || 0;
+    if (x.cajas) haC += x.ha; if (x.enf) haE += x.ha; o.n += x.n;
+    for (const lab of LABS3) { o.lab[lab].p += x.lab[lab].p; o.lab[lab].r += x.lab[lab].r; }
+    if (x.lluvia != null) { llX += x.lluvia * E.HA_BASE[x.f]; llH += E.HA_BASE[x.f]; }
+    for (const k of Object.keys(x.sig || {})) { o.sg[k] = (o.sg[k] || 0) + x.sig[k] * E.HA_BASE[x.f]; o.sgN[k] = (o.sgN[k] || 0) + E.HA_BASE[x.f]; } }
+  const r = perFinish(o, haC); r.enfHa = o.enf && haE ? o.enf / haE : null; r.lluvia = llH ? llX / llH : null; r.ha = haC || haE; return r;
+}
+// datos del período: actual, anterior, mismo período del año pasado y acumulados del año
+function perData(y, p) {
+  const FS = E.FARMS; const ws = perWeeks(y, p); const [py, pp] = perPrev(y, p); const wsP = perWeeks(py, pp); const wsL = perWeeks(y - 1, p).filter((w) => w <= (ws[ws.length - 1] || 0) || ws.length === 4);
+  const ytd = range(1, ws[ws.length - 1] || 0); const ytdL = range(1, ws[ws.length - 1] || 0);
+  const cur = Object.fromEntries(FS.map((f) => [f, perFarm(f, y, ws)])); const prev = Object.fromEntries(FS.map((f) => [f, perFarm(f, py, wsP)])); const last = Object.fromEntries(FS.map((f) => [f, perFarm(f, y - 1, wsL)]));
+  const G = (src) => ({ ALL: perGroup(FS.map((f) => src[f]), 'Consolidado Grupo'), VIES: perGroup(GROUPS.find((g) => g.k === 'VIES').f.map((f) => src[f]), 'Viesfrut'), FRUT: perGroup([src['SAN JUAN 2']], 'Frutesca'), PROD: perGroup([src['TRES MARIAS']], 'Produbavi') });
+  const yA = Object.fromEntries(FS.map((f) => [f, perFarm(f, y, ytd)])), yL = Object.fromEntries(FS.map((f) => [f, perFarm(f, y - 1, ytdL)]));
+  // tendencia por período (grupo) del año y del anterior
+  const nP = perOfWeek(M.year === y ? M.lastWeek : 52);
+  const trend = {}; for (const yy of [y, y - 1]) trend[yy] = range(1, 13).map((k) => { if (yy === y && k > nP) return null; const w2 = perWeeks(yy, k); return w2.length ? perGroup(FS.map((f) => perFarm(f, yy, w2)), 'G') : null; });
+  const R = M.recus?.rows?.length ? recSummary(FS, y, ws[0], ws[ws.length - 1]) : null; const Rp = M.recus?.rows?.length && py === y ? recSummary(FS, py, wsP[0], wsP[wsP.length - 1]) : null;
+  return { y, p, ws, py, pp, wsP, wsL, cur, prev, last, g: G(cur), gp: G(prev), gl: G(last), yA, yL, gyA: perGroup(FS.map((f) => yA[f]), 'G'), gyL: perGroup(FS.map((f) => yL[f]), 'G'), trend, R, Rp,
+    complete: ws.length === (p === 13 ? ws.length : 4), lbl: perLbl(y, p), lblP: perLbl(py, pp), lblL: perLbl(y - 1, p) };
+}
+// ----- formato -----
+const vpct = (a, b) => (a != null && b ? fmt.sp(a / b - 1).replace('.', ',') : '—');
+const vpp = (a, b) => (a != null && b != null ? `${a - b >= 0 ? '+' : ''}${((a - b) * 100).toFixed(1).replace('.', ',')} pp` : '—');
+const vabs = (a, b, d = 2) => (a != null && b != null ? `${a - b >= 0 ? '+' : ''}${(a - b).toFixed(d).replace('.', ',')}` : '—');
+function perKpiRows(D) {
+  const { g, gp, gl, gyA, gyL } = D; const A = g.ALL, P = gp.ALL, L = gl.ALL;
+  const k = (lbl, key, f, vf) => [lbl, f(A[key]), f(P[key]), vf(A[key], P[key]), f(L[key]), vf(A[key], L[key]), f(gyA[key]), f(gyL[key]), vf(gyA[key], gyL[key])];
+  const sg = (lbl, key, f) => { const a = A.sig[key], b = P.sig[key], c = L.sig[key]; return [lbl, f(a), f(b), vabs(a, b), f(c), vabs(a, c), f(gyA.sig[key]), f(gyL.sig[key]), vabs(gyA.sig[key], gyL.sig[key])]; };
+  const lb = (lab) => { const a = A.lab[lab].pct, b = P.lab[lab].pct; return [`Cumplimiento ${LABN[lab].toLowerCase()}`, pc1(a), pc1(b), vpp(a, b), '—', '—', pc1(gyA.lab[lab].pct), '—', '—']; };
+  return [k('Cajas exportadas', 'cajas', n0, vpct), k('Cajas / ha', 'cjHa', n2, vpct), k('Enfunde (racimos)', 'enf', n0, vpct), k('Enfunde / ha', 'enfHa', n2, vpct), k('Racimos cortados', 'cort', n0, vpct),
+    k('Ratio (cajas / racimo procesado)', 'ratio', n2, vpct), k('Peso racimo (kg)', 'peso', n2, vpct), k('% racimos recusados', 'recPct', pc2, vpp), k('Recobro de cinta', 'recobro', pc1, vpp),
+    k('% merma de proceso', 'merma', pc2, vpp), k('Cajas perdidas (merma)', 'cjTot', n0, vpct), k('USD perdidos (merma)', 'usd', (v) => fmt.usd(v), vpct), k('Lluvia (mm, prom. ponderado)', 'lluvia', n0, (a, b) => (a != null && b != null ? `${a - b >= 0 ? '+' : ''}${n0(a - b)} mm` : '—')),
+    sg('YLS (hoja más joven manchada)', 'yls', n1), sg('YLWS (hoja más joven con síntomas)', 'ylws', n1), sg('I.I (índice de infección)', 'ii', n3), ...LABS3.map(lb)]
+    .map((r) => Object.assign(r, /recusados|merma|I\.I/.test(r[0]) ? { __inv: 1 } : /Lluvia/.test(r[0]) ? { __neu: 1 } : {}));
+}
+const PER_HEAD = (D) => ['Indicador', D.lbl, D.lblP, 'Var.', D.lblL, 'Var.', `Acum. ${D.y} S1–S${D.ws[D.ws.length - 1]}`, `Acum. ${D.y - 1}`, 'Var.'];
+function perNarr(D) {
+  const { g, gp, gl, cur, y, p } = D; const A = g.ALL, P = gp.ALL, L = gl.ALL; const FS = E.FARMS;
+  const fr = FS.map((f) => cur[f]).filter((x) => x.cajas && x.f !== 'TRES MARIAS');
+  const byHa = fr.slice().sort((a, b) => b.cjHa - a.cjHa); const byR = FS.map((f) => cur[f]).filter((x) => x.ratio).sort((a, b) => b.ratio - a.ratio);
+  const vsL = FS.map((f) => ({ f, a: cur[f].cjHa, b: D.last[f].cjHa })).filter((x) => x.a && x.b).sort((a, b) => a.a / a.b - b.a / b.b);
+  return `El período ${p} (S${D.ws[0]}–S${D.ws[D.ws.length - 1]}) cerró con **${n0(A.cajas)} cajas exportadas** (${n2(A.cjHa)} cajas/ha), ${vpct(A.cajas, P.cajas)} frente al ${D.lblP} y ${vpct(A.cajas, L.cajas)} frente al mismo período de ${y - 1}. El ratio fue de **${n2(A.ratio)}** (${D.lblP}: ${n2(P.ratio)}; ${D.lblL}: ${n2(L.ratio)}) y el peso de racimo de ${n2(A.peso)} kg.\n\n`
+    + `**Mejor productividad:** ${byHa.slice(0, 3).map((x) => `${NOM[x.f]} (${n2(x.cjHa)} cj/ha)`).join(', ')}. **Más baja:** ${byHa.slice(-2).reverse().map((x) => `${NOM[x.f]} (${n2(x.cjHa)})`).join(' y ')}. `
+    + `**Mejor ratio:** ${byR.slice(0, 2).map((x) => `${NOM[x.f]} (${n2(x.ratio)})`).join(' y ')}; **más bajo:** ${byR.slice(-2).reverse().map((x) => `${NOM[x.f]} (${n2(x.ratio)})`).join(' y ')}.\n\n`
+    + (vsL.length ? `**Frente a ${y - 1} (cajas/ha):** ${vsL.filter((x) => x.a < x.b).length ? `bajaron ${lista(vsL.filter((x) => x.a < x.b).map((x) => `${NOM[x.f]} (${vpct(x.a, x.b)})`))}` : 'ninguna finca bajó'}; ${vsL.filter((x) => x.a >= x.b).length ? `subieron ${lista(vsL.filter((x) => x.a >= x.b).reverse().slice(0, 4).map((x) => `${NOM[x.f]} (${vpct(x.a, x.b)})`))}` : 'ninguna subió'}.\n\n` : '')
+    + `Recusados ${pc2(A.recPct)} (${n0(A.rech)} racimos), recobro de cinta ${pc1(A.recobro)} (meta 98%), merma de proceso ${pc2(A.merma)}. La merma total del período suma **${n0(A.cjTot)} cajas perdidas, ${fmt.usd(A.usd)}**. Lluvia promedio ${n0(A.lluvia)} mm (${D.lblL}: ${n0(L.lluvia)} mm).`;
+}
+// semáforo del período por hacienda
+function perStatus(D, f) {
+  const x = D.cur[f], l = D.last[f]; const al = [];
+  if (x.cjHa && l.cjHa) { const v = x.cjHa / l.cjHa - 1; if (v < -0.1) al.push(['ROJO', `Cajas/ha ${fmt.sp(v)} vs ${D.y - 1}`]); else if (v < -0.03) al.push(['AMARILLO', `Cajas/ha ${fmt.sp(v)} vs ${D.y - 1}`]); }
+  if (x.ratio != null) { if (x.ratio < 0.78) al.push(['ROJO', `Ratio ${n2(x.ratio)}`]); else if (x.ratio < 0.82) al.push(['AMARILLO', `Ratio ${n2(x.ratio)}`]); }
+  if (x.recobro != null) { if (x.recobro < 0.95 || x.recobro > 1.02) al.push(['ROJO', `Recobro ${pc1(x.recobro)}`]); else if (x.recobro < 0.98) al.push(['AMARILLO', `Recobro ${pc1(x.recobro)}`]); }
+  if (x.recPct != null) { if (x.recPct > 0.02) al.push(['ROJO', `Recusados ${pc2(x.recPct)}`]); else if (x.recPct > 0.01) al.push(['AMARILLO', `Recusados ${pc2(x.recPct)}`]); }
+  if (x.merma != null) { if (x.merma > mermaMeta() + 0.04) al.push(['ROJO', `Merma ${pc1(x.merma)}`]); else if (x.merma > mermaMeta()) al.push(['AMARILLO', `Merma ${pc1(x.merma)}`]); }
+  if (x.sig.yls != null) { if (x.sig.yls < 6) al.push(['ROJO', `YLS ${n1(x.sig.yls)}`]); else if (x.sig.yls < 8) al.push(['AMARILLO', `YLS ${n1(x.sig.yls)}`]); }
+  for (const lab of ['maleza', 'limpieza']) { const v = x.lab[lab].pct; if (v != null && v < 0.8) al.push(['ROJO', `${LABN[lab]} ${pc0(v)}`]); else if (v != null && v < 0.95) al.push(['AMARILLO', `${LABN[lab]} ${pc0(v)}`]); }
+  return { f, al, sem: al.some((a) => a[0] === 'ROJO') ? 'ROJO' : al.length ? 'AMARILLO' : 'VERDE' };
+}
+function perAcciones(D) {
+  const FS = E.FARMS; const c = []; const cur = (f) => D.cur[f];
+  const mp = FS.filter((f) => cur(f).cjEvit > 0).sort((a, b) => cur(b).cjEvit - cur(a).cjEvit);
+  if (mp.length) { const usd = sum(mp.map((f) => cur(f).cjEvit)) * S.precio; c.push({ s: usd, t: `Bajar la merma de proceso en ${mp.slice(0, 3).map((f) => `${NOM[f]} (${pc1(cur(f).merma)})`).join(', ')}: revisión diaria de dedos cortos, cicatrices y puntas en empacadora, calibración del corte y del manejo de racimo en cable vía.`,
+    por: `${n0(sum(mp.map((f) => cur(f).cjEvit)))} cajas perdidas sobre la meta de ${pc1(mermaMeta())} en el período.`, r: mp.slice(0, 3).map((f) => ADMIN[f]).join(', ') + ' + Jefe de Empacadora', k: `Merma de proceso <= ${pc1(mermaMeta())}`, usd }); }
+  const rb = FS.filter((f) => cur(f).recobro != null && cur(f).recobro < 0.95).sort((a, b) => cur(a).recobro - cur(b).recobro);
+  if (rb.length) { const usd = sum(rb.map((f) => (0.98 - cur(f).recobro) * cur(f).ce * (cur(f).ratio || 0.8) * S.precio + (0.98 - cur(f).recobro) * cur(f).ce * COSTO_RAC)); c.push({ s: usd, t: `Auditar recobro de cinta en ${rb.map((f) => `${NOM[f]} (${pc1(cur(f).recobro)})`).join(', ')}: reconteo de cuculas por lote, cruce de fundas entregadas contra registradas y barrido de racimos sin cinta.`,
+    por: 'Cintas cosechadas en el período por debajo de 95%.', r: rb.map((f) => ADMIN[f]).join(', ') + ' + Control de Calidad', k: 'Recobro >= 98% en el próximo período', usd }); }
+  const rc = FS.filter((f) => cur(f).recPct > 0.015).sort((a, b) => cur(b).recPct - cur(a).recPct);
+  if (rc.length) { const usd = sum(rc.map((f) => cur(f).cjRech * S.precio + cur(f).rech * COSTO_RAC)); c.push({ s: usd * 0.9, t: `Reducir racimos recusados en ${rc.slice(0, 3).map((f) => `${NOM[f]} (${pc2(cur(f).recPct)})`).join(', ')}${D.R?.defs?.[0] ? `; principal motivo "${D.R.defs[0]}"` : ''}.`,
+    por: 'Recusado = racimo enfundado y fertilizado que no llega a caja.', r: rc.slice(0, 3).map((f) => ADMIN[f]).join(', '), k: 'Recusados <= 1%', usd }); }
+  const lw = FS.filter((f) => ['maleza', 'limpieza', 'seleccion'].some((l) => cur(f).lab[l].pct != null && cur(f).lab[l].pct < 0.8));
+  if (lw.length) c.push({ s: 500 * lw.length, t: `Recuperar labores atrasadas en ${lw.map((f) => `${NOM[f]} (${LABS3.filter((l) => cur(f).lab[l].pct != null && cur(f).lab[l].pct < 0.8).map((l) => `${LABN[l].toLowerCase()} ${pc0(cur(f).lab[l].pct)}`).join(', ')})`).join('; ')}.`,
+    por: 'Cumplimiento del período bajo 80% de lo programado.', r: lw.map((f) => ADMIN[f]).join(', '), k: '>= 95% de lo programado' });
+  const sg = FS.filter((f) => cur(f).sig.yls != null && cur(f).sig.yls < 8);
+  if (sg.length) c.push({ s: 800 * sg.length, t: `Sigatoka: YLS promedio bajo 8 en ${sg.map((f) => `${NOM[f]} (${n1(cur(f).sig.yls)})`).join(', ')}; mantener intervalo de 11 a 14 días y deshoje sanitario.`, por: 'Promedio de las lecturas del período.', r: 'Técnico Sigatoka + Jefe de Producción', k: 'YLS >= 8' });
+  return c.sort((a, b) => b.s - a.s).slice(0, 3);
+}
+// ----- gráficos -----
+const PCOL = { cur: '#1f7a43', prev: '#f2b705', last: '#9e9e9e' };
+function perBars(D, labels, a, b, c, title, vf = n2, opt = {}) {
+  return { type: 'bar', data: { labels, datasets: [{ label: D.lbl, data: a, backgroundColor: PCOL.cur, vl: vf, vlSize: 11 }, { label: D.lblP, data: b, backgroundColor: PCOL.prev }, { label: D.lblL, data: c, backgroundColor: PCOL.last }] },
+    options: { plugins: { title: { text: title }, legend: { display: true } }, scales: { x: { ticks: { maxRotation: 35, minRotation: 0 } }, y: { beginAtZero: opt.min == null, min: opt.min, ticks: opt.yfmt ? { callback: opt.yfmt } : {} } } } };
+}
+function perTrend(D, key, title, vf = n2, opt = {}) {
+  const g = (yy, k) => { const t = D.trend[yy][k - 1]; if (!t) return null; return opt.sig ? t.sig[key] ?? null : t[key] ?? null; };
+  return { type: 'line', data: { labels: range(1, 13).map((k) => 'P' + k), datasets: [{ label: String(D.y), data: range(1, 13).map((k) => g(D.y, k)), borderColor: PCOL.cur, backgroundColor: PCOL.cur, borderWidth: 3.5, pointRadius: range(1, 13).map((k) => (k === D.p ? 7 : 4)), vl: vf, vlSize: 12, spanGaps: true },
+    { label: String(D.y - 1), data: range(1, 13).map((k) => g(D.y - 1, k)), borderColor: '#9e9e9e', backgroundColor: '#9e9e9e', borderWidth: 2.5, borderDash: [6, 4], pointRadius: 3, spanGaps: true }, ...(opt.ref != null ? [{ label: opt.refLabel || 'Meta', data: range(1, 13).map(() => opt.ref), borderColor: '#d32f2f', borderWidth: 2, pointRadius: 0 }] : [])] },
+    options: { plugins: { title: { text: title }, legend: { display: true } }, scales: { y: { beginAtZero: opt.min == null && !opt.auto, min: opt.min, ticks: opt.yfmt ? { callback: opt.yfmt } : {} } } } };
+}
+// ----- texto para correo -----
+const LINE = '─'.repeat(33);
+const secMail = (t) => `${LINE}\n${t}\n${LINE}`;
+const lista = (a) => (a.length <= 1 ? a.join('') : a.slice(0, -1).join(', ') + ' y ' + a[a.length - 1]);
+function labCycleSum(lab, y, w) {
+  const cyc = labCycles(lab); const now = absLW(y, w); const C = cyc.find((c) => c.a <= now && now <= c.fin) || cyc.filter((c) => c.a <= now).pop(); if (!C) return null;
+  let TA = 0, TR = 0, TP = 0; const farms = E.FARMS.filter((f) => C.farm[f]).map((f) => { const l = C.recs.filter((r) => r.farm === f && absLW(r.y, r.w) <= now); const tr = sum(l.map((r) => r.real)), tp = sum(l.map((r) => r.prog)); const a = C.farm[f].area || E.HA_BASE[f]; TA += a; TR += tr; TP += tp; return { f, a, tr, tp, d: tr - tp, pct: a ? tr / a : null }; });
+  const wk = labAgg((M.labores2?.[lab] || []).filter((r) => r.y === y && r.w === w));
+  return { C, TA, TR, TP, pct: TA ? TR / TA : null, wk, farms, late: farms.filter((x) => x.d < -0.5).sort((a, b) => a.d - b.d) };
+}
+function mailLabores(y, w, wsP) {
+  const out = []; const nm = { maleza: 'Maleza', seleccion: 'Selección', limpieza: 'Limpieza de Matas' };
+  for (const lab of LABS3) { const s = labCycleSum(lab, y, w); if (!s) continue;
+    const wk = wsP ? labAgg((M.labores2?.[lab] || []).filter((r) => r.y === y && wsP.includes(r.w))) : s.wk;
+    out.push(`* ${nm[lab]} ${s.C.label}: ${pc0(s.pct)} ejecutado acumulado (${n2(s.TR)} de ${n2(s.TA)} has). ${wsP ? `En el período` : 'En la semana'} se realizaron ${n2(wk.r)} de ${n2(wk.p)} has programadas (${pc0(wk.pct)})${s.TP - s.TR > 0.5 ? `, con un atraso acumulado de ${n2(s.TP - s.TR)} has` : ', sin atraso frente a lo programado'}.${s.late.length ? ` Los mayores rezagos son ${lista(s.late.slice(0, 2).map((x) => `${NOM[x.f]} (${pc0(x.pct)}, ${n2(x.d)} has)`))}.` : ''}`); }
+  const cyc = currentCycle(); if (cyc) { const fc = fertCycle(cyc, w); const FS = E.FARMS.filter((f) => fc[f] && (fc[f].sacosProg || fc[f].sacosEnt || fc[f].sacos));
+    const fin = FS.filter((f) => fc[f].pct >= 0.98); const finNow = fin.filter((f) => (wsP || [w]).includes(Math.max(...fc[f].semanas))); const enC = FS.filter((f) => fc[f].pct > 0 && fc[f].pct < 0.98); const pend = FS.filter((f) => !(fc[f].pct > 0));
+    out.push(`* Fertilización Ciclo ${cyc}: ${finNow.length ? `${lista(finNow.map((f) => NOM[f]))} culminaron su aplicación ${wsP ? 'en el período' : `en la semana ${w}`}. ` : ''}${fin.filter((f) => !finNow.includes(f)).length ? `${lista(fin.filter((f) => !finNow.includes(f)).map((f) => NOM[f]))} ${fin.filter((f) => !finNow.includes(f)).length > 1 ? 'ya habían completado' : 'ya había completado'} el ciclo. ` : ''}${enC.length ? `${enC.map((f) => `${NOM[f]} lleva ${n0(fc[f].sacos)} de ${n0(fc[f].sacosEnt || fc[f].sacosProg)} sacos`).join('; ')}. ` : ''}${pend.length ? `${lista(pend.map((f) => NOM[f]))} ${pend.length > 1 ? 'siguen pendientes' : 'sigue pendiente'}.` : ''}`.trim()); }
+  const wsN = wsP || [w]; const nem = (M.fertLog || []).filter((x) => !(x.mezcla > 0) && x.sacos > 0 && wsN.includes(x.sem));
+  if (nem.length) { const nf = [...new Set(nem.map((x) => x.farm))]; out.push(`* Nematicida / otras aplicaciones: ${nf.map((f) => `${NOM[f]} aplicó ${n0(sum(nem.filter((x) => x.farm === f).map((x) => x.sacos)))} sacos en ${n2(sum(nem.filter((x) => x.farm === f).map((x) => x.ha)))} ha`).join('; ')}.`); }
+  return out.join('\n');
+}
+function mailCalidad(rows, R, cortTot, rechTot, txtPer) {
+  const rg = (k, d = 2) => { const v = rows.map((x) => x[k]).filter((x) => x != null); return v.length ? `${n2(Math.min(...v))}–${n2(Math.max(...v))}` : 's/d'; };
+  const pw = rows.filter((x) => x.peso); const peso = sum(pw.map((x) => x.peso * (x.proc || 1))) / (sum(pw.map((x) => x.proc || 1)) || 1); const noP = rows.filter((x) => !x.peso && (x.cort || x.proc));
+  let t = `Parámetros de condición ${txtPer}: calibración subbasal (${rg('calSub')}), apical (${rg('calApi')}), largo de dedo (${rg('dedo')}) y número de manos (${rg('manos')}). El peso promedio de las fincas con pesaje es de ${n2(peso)} kg.${noP.length ? ` ${lista(noP.map((x) => NOM[x.f]))} sin dato de peso.` : ''}`;
+  if (R && R.tot) { const over = E.FARMS.filter((f) => R.byFarm[f]?.pct > 0.01).sort((a, b) => R.byFarm[b].pct - R.byFarm[a].pct); const d0 = R.defs[0], d1 = R.defs[1];
+    const topF = d0 ? E.FARMS.filter((f) => R.byFarm[f]?.d[d0]).sort((a, b) => R.byFarm[b].d[d0] - R.byFarm[a].d[d0])[0] : null;
+    t += `\nEl porcentaje de racimos recusados cerró en ${pc2(R.pct)} (${n0(R.tot)} racimos de ${n0(R.cort)} cortados), ${R.pct > 0.01 ? 'por encima' : 'por debajo'} del umbral del 1,00%. ${over.length ? `${over.length} de las ${E.FARMS.filter((f) => R.byFarm[f]?.cort).length} fincas superan el umbral, encabezadas por ${lista(over.slice(0, 2).map((f) => `${NOM[f]} (${pc2(R.byFarm[f].pct)}, ${n0(R.byFarm[f].n)} racimos)`))}.` : 'Ninguna finca supera el umbral.'}${d0 ? ` La principal causa es "${d0}" con el ${pc2(R.byDef[d0] / R.tot)} de los recusados (${n0(R.byDef[d0])} racimos${topF ? `, ${n0(R.byFarm[topF].d[d0])} de ellos en ${NOM[topF]}` : ''})${d1 ? `, seguida de "${d1}" con el ${pc2(R.byDef[d1] / R.tot)}` : ''}.` : ''}`;
+  } else if (rechTot != null) t += `\nRacimos recusados: ${n0(rechTot)} de ${n0(cortTot)} cortados (${pc2(cortTot ? rechTot / cortTot : null)}).`;
+  return t;
+}
+function mailWeekly(y, w) {
+  const FS = E.FARMS; const rows = FS.map((f) => ({ f, ...prodFarm(f, y, w) })).map((x) => ({ ...x, cajasH: weekVal('cajas', x.f, y, w), ha: haOf(x.f, y) }));
+  const grp = (fs) => { const l = rows.filter((x) => fs.includes(x.f)); const c = sum(l.map((x) => x.cajasH || 0)), h = sum(l.filter((x) => x.cajasH).map((x) => x.ha)), pr = sum(l.map((x) => x.proc || 0)); return { c, h, cha: h ? c / h : null, r: pr ? c / pr : null }; };
+  const gA = grp(FS), gV = grp(GROUPS.find((g) => g.k === 'VIES').f), gF = grp(['SAN JUAN 2']), gP = grp(['TRES MARIAS']);
+  const rr = rows.filter((x) => x.ratio && x.proc).map((x) => ({ ...x, ratio: (x.cajasH || x.cajas) / x.proc })).sort((a, b) => b.ratio - a.ratio);
+  const best = rr[0], worst = rr[rr.length - 1]; const dt = (x) => `ratio ${n2(x.ratio)}${x.rechProc != null ? `, rechazo en proceso de ${pc2(x.rechProc)}` : ''}${x.desp != null && Math.abs(x.desp - (x.rechProc ?? -1)) > 0.0001 ? ` y desperdicio de ${pc2(x.desp)}` : ''}`;
+  const R = M.recus?.rows?.length ? recSummary(FS, y, w, w) : null;
+  let cw = w - 13, cy = y; if (cw <= 0) { cy -= 1; cw += 52; } const col = weekColor(cy, cw); const colN = col ? (E.COLORES[col] || col) : '';
+  const rc = FS.map((f) => ({ f, x: cohortRec([f], cy, cw, true) })).filter((o) => o.x); const rG = cohortRec(rc.map((o) => o.f), cy, cw, true);
+  const ab = rc.filter((o) => o.x.r >= 0.98).sort((a, b) => b.x.r - a.x.r), lim = rc.filter((o) => o.x.r >= 0.97 && o.x.r < 0.98), lo = rc.filter((o) => o.x.r < 0.97).sort((a, b) => a.x.r - b.x.r);
+  return `Me permito presentar el resumen de los principales indicadores de producción y cumplimiento de labores correspondientes a la semana ${w} del año ${y}.
+
+${secMail('PRODUCCIÓN Y EXPORTACIÓN')}
+Consolidado Grupo: ${n0(gA.c)} cajas exportadas | ${n2(gA.cha)} cajas/ha | Ratio ${n2(gA.r)}
+Viesfrut: ${n0(gV.c)} cajas exportadas | ${n2(gV.cha)} cajas/ha | Ratio ${n2(gV.r)}
+Frutesca: ${n0(gF.c)} cajas exportadas | ${n2(gF.cha)} cajas/ha | Ratio ${n2(gF.r)}
+Produbavi: ${n0(gP.c)} cajas exportadas | ${n2(gP.cha)} cajas/ha | Ratio ${n2(gP.r)}
+${best ? `Destaca ${NOM[best.f]} como la finca de mejor desempeño de la semana (${dt(best)}). Le siguen ${lista(rr.slice(1, 3).map((x) => `${NOM[x.f]} (${n2(x.ratio)})`))}. Por el contrario, ${NOM[worst.f]} presenta el indicador más crítico con ${dt(worst)}, requiriendo atención inmediata.` : ''}
+
+${secMail('CALIDAD DE RACIMO')}
+${mailCalidad(rows, R, sum(rows.map((x) => x.cort || 0)), sum(rows.map((x) => x.rech || 0)), 'de la semana')}
+
+${secMail(`RECOBRO DE CINTA ${colN.toUpperCase()}`.trim())}
+${rG ? `Consolidado: ${pc2(rG.r)} (meta: 98%; cinta enfundada en la semana ${cw}). ${ab.length ? `Fincas por encima de la meta: ${lista(ab.map((o) => `${NOM[o.f]} (${pc2(o.x.r)})`))}.` : 'Ninguna finca alcanza la meta.'}${lim.length ? ` ${lista(lim.map((o) => `${NOM[o.f]}`))} ${lim.length > 1 ? 'quedan' : 'queda'} al límite con ${lista(lim.map((o) => pc2(o.x.r)))}.` : ''}${lo.length ? ` Las más bajas son ${lista(lo.slice(0, 3).map((o) => `${NOM[o.f]} (${pc2(o.x.r)})`))}.` : ''}` : 'Sin cohorte completa para medir esta semana.'}
+
+${secMail('CUMPLIMIENTO DE LABORES CULTURALES')}
+${mailLabores(y, w)}
+
+Adjunto el informe completo con el detalle por finca y gráficas de cada indicador.`;
+}
+function mailPeriod(D) {
+  const { g, gp, gl, y, p, ws, cur } = D; const FS = E.FARMS;
+  const L1 = (n, a, b, c) => `${n}: ${n0(a.cajas)} cajas exportadas | ${n2(a.cjHa)} cajas/ha | Ratio ${n2(a.ratio)} (${D.lblP}: ${b.cjHa ? `${n2(b.cjHa)} cj/ha, ${vpct(a.cjHa, b.cjHa)}` : 'sin dato'}; ${D.lblL}: ${c.cjHa ? `${n2(c.cjHa)} cj/ha, ${vpct(a.cjHa, c.cjHa)}` : 'sin dato'})`;
+  const rr = FS.map((f) => cur[f]).filter((x) => x.ratio).sort((a, b) => b.ratio - a.ratio); const best = rr[0], worst = rr[rr.length - 1];
+  const dt = (x) => `ratio ${n2(x.ratio)}${x.merma != null ? `, merma de proceso de ${pc2(x.merma)}` : ''}${x.recPct != null ? ` y recusados de ${pc2(x.recPct)}` : ''}`;
+  const rows = FS.map((f) => ({ ...cur[f] }));
+  const rc = FS.map((f) => cur[f]).filter((x) => x.recobro != null); const ab = rc.filter((x) => x.recobro >= 0.98).sort((a, b) => b.recobro - a.recobro), lo = rc.filter((x) => x.recobro < 0.97).sort((a, b) => a.recobro - b.recobro);
+  const A = g.ALL;
+  return `Me permito presentar el resumen de los principales indicadores de producción y cumplimiento de labores correspondientes al período ${p} (semanas ${ws[0]} a ${ws[ws.length - 1]}) del año ${y}, con su comparación frente al período anterior (${D.lblP}) y al mismo período de ${y - 1}.
+
+${secMail('PRODUCCIÓN Y EXPORTACIÓN')}
+${L1('Consolidado Grupo', g.ALL, gp.ALL, gl.ALL)}
+${L1('Viesfrut', g.VIES, gp.VIES, gl.VIES)}
+${L1('Frutesca', g.FRUT, gp.FRUT, gl.FRUT)}
+${L1('Produbavi', g.PROD, gp.PROD, gl.PROD)}
+Enfunde del período: ${n0(A.enf)} racimos (${n2(A.enfHa)} por ha; ${D.lblL}: ${n2(gl.ALL.enfHa)}). Acumulado del año a la semana ${ws[ws.length - 1]}: ${n0(D.gyA.cajas)} cajas, ${vpct(D.gyA.cajas, D.gyL.cajas)} frente a ${y - 1}.
+${best ? `Destaca ${NOM[best.f]} como la finca de mejor desempeño del período (${dt(best)}). Le siguen ${lista(rr.slice(1, 3).map((x) => `${NOM[x.f]} (${n2(x.ratio)})`))}. Por el contrario, ${NOM[worst.f]} presenta el indicador más crítico con ${dt(worst)}, requiriendo atención inmediata.` : ''}
+
+${secMail('CALIDAD DE RACIMO Y MERMA')}
+${mailCalidad(rows, D.R, A.cort, A.rech, 'del período')}
+Merma del período: ${n0(A.cjTot)} cajas perdidas valoradas en ${fmt.usd(A.usd)} (proceso sobre meta ${n0(A.cjEvit)} cj, recusados ${n0(A.cjRech)} cj, campo ${n0(A.cjCampo)} cj). Merma de proceso ${pc2(A.merma)} (${D.lblP}: ${pc2(gp.ALL.merma)}).
+
+${secMail('RECOBRO DE CINTA')}
+Consolidado de las cintas cosechadas en el período: ${pc2(A.recobro)} (meta: 98%; ${D.lblP}: ${pc2(gp.ALL.recobro)}; ${D.lblL}: ${pc2(gl.ALL.recobro)}). ${ab.length ? `Fincas por encima de la meta: ${lista(ab.map((x) => `${NOM[x.f]} (${pc2(x.recobro)})`))}.` : ''}${lo.length ? ` Las más bajas son ${lista(lo.slice(0, 3).map((x) => `${NOM[x.f]} (${pc2(x.recobro)})`))}.` : ''}
+
+${secMail('SIGATOKA Y LLUVIA')}
+YLS promedio ${n1(A.sig.yls)} (${D.lblL}: ${n1(gl.ALL.sig.yls)}), YLWS ${n1(A.sig.ylws)}, I.I ${n3(A.sig.ii)}. Lluvia del período: ${n0(A.lluvia)} mm promedio ponderado (${D.lblP}: ${n0(gp.ALL.lluvia)} mm; ${D.lblL}: ${n0(gl.ALL.lluvia)} mm).
+
+${secMail('CUMPLIMIENTO DE LABORES CULTURALES')}
+${mailLabores(y, ws[ws.length - 1], ws)}
+
+Adjunto el informe completo del período con el detalle por finca, comparativos y gráficas de cada indicador.`;
+}
+// ----- PDF del período -----
+async function buildPeriodPDF(y, p, onp = () => {}) {
+  const D = perData(y, p); const FS = E.FARMS; const w2 = D.ws[D.ws.length - 1];
+  const I = { sem: `${D.ws[0]}–${w2}`, anio: y, per: p, titulo: 'INFORME DE PERÍODO · PRODUCCIÓN BANANERA', top: `PERÍODO: ${p}   |  AÑO: ${y}`, bot: `SEMANAS ${D.ws[0]} A ${w2}` };
+  const doc = pdfNew(); let Y = pdfHeader(doc, I); const tick2 = async (t) => { onp(t); await tick(); };
+  const lbl = FS.map((f) => NOM[f]); const today = new Date().toLocaleDateString('es-EC');
+  doc.setTextColor(...RP.verde); doc.setFont('helvetica', 'bold'); doc.setFontSize(11.5); doc.text('INDICADORES DE PRODUCCIÓN Y CUMPLIMIENTO DE LABORES DEL PERÍODO', pageW(doc) / 2, Y, { align: 'center' });
+  doc.setTextColor(110); doc.setFont('helvetica', 'normal'); doc.setFontSize(8.5); doc.text(`Período ${p} (S${D.ws[0]}–S${w2}) — Año ${y}  |  Comparado con ${D.lblP} y ${D.lblL}  |  Para Gerencia General  |  ${today}`, pageW(doc) / 2, Y + 14, { align: 'center' }); Y += 32; doc.setTextColor(0);
+  if (!D.complete) { doc.setTextColor(200, 0, 0); doc.setFontSize(9); doc.text(`Período en curso: incluye S${D.ws[0]}–S${w2}.`, pageW(doc) / 2, Y - 6, { align: 'center' }); doc.setTextColor(0); Y += 6; }
+  await tick2('Resumen…');
+  Y = secT(doc, 'RESUMEN EJECUTIVO DEL PERÍODO', Y);
+  const KR = perKpiRows(D);
+  Y = tbl(doc, Y, [PER_HEAD(D)], KR.map((r) => rowOf(r.slice())), { fs: 7.2, hfs: 7, left: 36, right: 36, cols: { 0: { halign: 'left', cellWidth: 150 } },
+    cell: (d) => { if (d.section === 'body' && [3, 5, 8].includes(d.column.index)) { const r = KR[d.row.index]; if (r.__neu) return; const s = String(d.cell.raw); const bad = r.__inv ? /^\+/.test(s) : /^-/.test(s), good = r.__inv ? /^-/.test(s) : /^\+/.test(s); if (bad) d.cell.styles.textColor = [200, 0, 0]; else if (good) d.cell.styles.textColor = [21, 107, 77]; } } });
+  doc.setFontSize(7.2); doc.setTextColor(110); doc.text('Var. en % para cantidades y en puntos porcentuales (pp) para porcentajes. Verde = mejora, rojo = deterioro (en recusados, merma e I.I bajar es mejorar).', 36, Y - 6); doc.setTextColor(0); Y += 6;
+  Y = rich(doc, perNarr(D), 50, Y, pageW(doc) - 100, 9.5, I);
+  // ===== Cajas y enfunde =====
+  for (const kind of ['cajas', 'enf']) {
+    await tick2(kind === 'cajas' ? 'Cajas…' : 'Enfunde…'); Y = pdfPage(doc, I);
+    const nm = kind === 'cajas' ? 'Cajas' : 'Enfunde'; const kh = kind === 'cajas' ? 'cjHa' : 'enfHa';
+    Y = secT(doc, `${nm.toUpperCase()} DEL PERÍODO ${p} POR HACIENDA`, Y);
+    const tot = (o) => o.ALL; const body = FS.map((f) => { const a = D.cur[f], b = D.prev[f], c = D.last[f], ya = D.yA[f], yl = D.yL[f];
+      return rowOf([NOM[f], n2(a.ha), n0(a[kind]), n2(a[kh]), n2(b[kh]), vpct(a[kh], b[kh]), n2(c[kh]), vpct(a[kh], c[kh]), n0(ya[kind]), n0(yl[kind]), vpct(ya[kind], yl[kind])], f); });
+    const A = tot(D.g), B = tot(D.gp), C = tot(D.gl);
+    body.push(rowOf(['Total Grupo', n2(A.ha), n0(A[kind]), n2(A[kh]), n2(B[kh]), vpct(A[kh], B[kh]), n2(C[kh]), vpct(A[kh], C[kh]), n0(D.gyA[kind]), n0(D.gyL[kind]), vpct(D.gyA[kind], D.gyL[kind])], null, { __tot: 1 }));
+    Y = tbl(doc, Y, [['Hacienda', 'Has', `${nm} ${D.lbl}`, `${kind === 'cajas' ? 'Cj' : 'Enf'}/ha ${D.lbl}`, `/ha ${D.lblP}`, 'Var.', `/ha ${D.lblL}`, 'Var.', `Acum. ${y}`, `Acum. ${y - 1}`, 'Var.']], body,
+      { fs: 7.2, hfs: 6.8, left: 36, right: 36, cell: (d) => { if (d.section === 'body' && [5, 7, 10].includes(d.column.index)) { const s = String(d.cell.raw); if (/^-/.test(s)) d.cell.styles.textColor = [200, 0, 0]; else if (/^\+/.test(s)) d.cell.styles.textColor = [21, 107, 77]; } } });
+    Y = addImg(doc, I, Y, chartImg(perBars(D, lbl, FS.map((f) => D.cur[f][kh]), FS.map((f) => D.prev[f][kh]), FS.map((f) => D.last[f][kh]), `${nm} por hectárea · ${D.lbl} vs ${D.lblP} vs ${D.lblL}`)), 480, 200);
+    Y = addImg(doc, I, Y, chartImg(perTrend(D, kh, `${nm} por hectárea del grupo por período · ${y} vs ${y - 1}`, n2, { auto: true })), 480, 190);
+  }
+  // ===== Parámetros de producción =====
+  await tick2('Parámetros de producción…'); Y = pdfPage(doc, I, 'l');
+  Y = secT(doc, `PARÁMETROS DE PRODUCCIÓN DEL PERÍODO ${p}`, Y);
+  Y = tbl(doc, Y, [['Hacienda', 'Rac. cortados', 'Recusados', '% Recus.', 'Procesados', 'Cajas', 'Ratio', `Ratio ${D.lblP}`, `Ratio ${D.lblL}`, 'Peso kg', `Peso ${D.lblL}`, 'Sub grado', 'Apical', 'Manos', 'Largo dedo', 'Días calib.', 'Edad corte', '% Merma proc.', '% Desperdicio']],
+    [...FS.map((f) => { const a = D.cur[f]; return rowOf([NOM[f], n0(a.cort), n0(a.rech), pc2(a.recPct), n0(a.proc), n0(a.cajas), n2(a.ratio), n2(D.prev[f].ratio), n2(D.last[f].ratio), n2(a.peso), n2(D.last[f].peso), n2(a.calSub), n2(a.calApi), n2(a.manos), n2(a.dedo), n2(a.dias), n2(a.edad), pc2(a.merma), pc2(a.desp)], f); }),
+      (() => { const a = D.g.ALL; return rowOf(['Total Grupo', n0(a.cort), n0(a.rech), pc2(a.recPct), n0(a.proc), n0(a.cajas), n2(a.ratio), n2(D.gp.ALL.ratio), n2(D.gl.ALL.ratio), n2(a.peso), n2(D.gl.ALL.peso), n2(a.calSub), n2(a.calApi), n2(a.manos), n2(a.dedo), n2(a.dias), n2(a.edad), pc2(a.merma), pc2(a.desp)], null, { __tot: 1 }); })()], { fs: 7, hfs: 6.5, left: 30, right: 30 });
+  doc.setFontSize(7.2); doc.setTextColor(110); doc.text('Ratio = cajas ÷ racimos procesados. Parámetros ponderados por racimos procesados de cada semana del período (Reporte de Producción semanal; base Pb9 para el año anterior).', 30, Y - 6); doc.setTextColor(0);
+  Y = pdfPage(doc, I); Y = secT(doc, `RATIO Y PESO · PERÍODO ${p}`, Y);
+  Y = addImg(doc, I, Y, chartImg(perBars(D, lbl, FS.map((f) => D.cur[f].ratio), FS.map((f) => D.prev[f].ratio), FS.map((f) => D.last[f].ratio), `Ratio por hacienda · ${D.lbl} vs ${D.lblP} vs ${D.lblL}`, n2, { min: 0.5 })), 480, 190);
+  Y = addImg(doc, I, Y, chartImg(perTrend(D, 'ratio', `Ratio del grupo por período · ${y} vs ${y - 1}`, n2, { auto: true })), 480, 175);
+  Y = addImg(doc, I, Y, chartImg(perTrend(D, 'peso', `Peso de racimo (kg) del grupo por período · ${y} vs ${y - 1}`, n2, { auto: true })), 480, 175);
+  // ===== Recusados y recobro =====
+  await tick2('Recusados y recobro…'); Y = pdfPage(doc, I); Y = secT(doc, `RACIMOS RECUSADOS Y RECOBRO DE CINTA · PERÍODO ${p}`, Y);
+  Y = tbl(doc, Y, [['Hacienda', 'Cortados', 'Recusados', `% ${D.lbl}`, `% ${D.lblP}`, `% ${D.lblL}`, 'Enfundados (cintas)', 'Cosechados', `Recobro ${D.lbl}`, `Recobro ${D.lblP}`, `Recobro ${D.lblL}`]],
+    [...FS.map((f) => { const a = D.cur[f]; return rowOf([NOM[f], n0(a.cort), n0(a.rech), pc2(a.recPct), pc2(D.prev[f].recPct), pc2(D.last[f].recPct), n0(a.ce), n0(a.cc), pc1(a.recobro), pc1(D.prev[f].recobro), pc1(D.last[f].recobro)], f); }),
+      (() => { const a = D.g.ALL; return rowOf(['Total Grupo', n0(a.cort), n0(a.rech), pc2(a.recPct), pc2(D.gp.ALL.recPct), pc2(D.gl.ALL.recPct), n0(a.ce), n0(a.cc), pc1(a.recobro), pc1(D.gp.ALL.recobro), pc1(D.gl.ALL.recobro)], null, { __tot: 1 }); })()],
+    { fs: 7.2, hfs: 6.6, left: 36, right: 36, cell: (d) => { if (d.section === 'body' && d.column.index === 8 && d.row.index < FS.length) { const r = D.cur[FS[d.row.index]].recobro; if (r != null) d.cell.styles.fillColor = r < 0.95 || r > 1.02 ? [244, 199, 195] : r < 0.98 ? [255, 236, 179] : [200, 230, 201]; } } });
+  if (D.R && D.R.tot) { const defs = D.R.defs.slice(0, 8);
+    Y = tbl(doc, Y, [['Motivo de recusado', 'Racimos', '% del total', ...(D.Rp ? [`Racimos ${D.lblP}`] : []), 'Fincas con más casos']], defs.map((d) => rowOf([d, n0(D.R.byDef[d]), pc2(D.R.byDef[d] / D.R.tot), ...(D.Rp ? [n0(D.Rp.byDef[d] || 0)] : []), FS.filter((f) => D.R.byFarm[f]?.d[d]).sort((a, b) => D.R.byFarm[b].d[d] - D.R.byFarm[a].d[d]).slice(0, 3).map((f) => `${NOM[f]} (${D.R.byFarm[f].d[d]})`).join(', ')])),
+      { fs: 7.2, left: 36, right: 36, cols: { 0: { halign: 'left' }, [D.Rp ? 4 : 3]: { halign: 'left' } } }); }
+  Y = addImg(doc, I, Y, chartImg(perTrend(D, 'recPct', `% racimos recusados del grupo por período · ${y} vs ${y - 1}`, pc2, { ref: 0.01, refLabel: 'Umbral 1%', yfmt: (v) => (v * 100).toFixed(1) + '%' })), 480, 165);
+  Y = addImg(doc, I, Y, chartImg(perTrend(D, 'recobro', `Recobro de cinta del grupo por período · ${y} vs ${y - 1}`, pc1, { ref: 0.98, refLabel: 'Meta 98%', auto: true, yfmt: (v) => Math.round(v * 100) + '%' })), 480, 165);
+  // ===== Merma =====
+  await tick2('Merma…'); Y = pdfPage(doc, I); Y = secT(doc, `MERMA Y CAJAS PERDIDAS · PERÍODO ${p}`, Y);
+  Y = tbl(doc, Y, [['Hacienda', 'Cajas', `% Merma ${D.lbl}`, `% Merma ${D.lblP}`, `% Merma ${D.lblL}`, 'Proceso sobre meta', 'Recusados', 'Campo', 'Sobrepeso', 'Cajas perdidas', 'USD perdidos', `USD ${D.lblP}`]],
+    [...FS.map((f) => { const a = D.cur[f]; return rowOf([NOM[f], n0(a.cajas), a.merma == null ? 's/d' : pc2(a.merma), pc2(D.prev[f].merma), pc2(D.last[f].merma), n0(a.cjEvit), n0(a.cjRech), n0(a.cjCampo), a.cjSob ? n1(a.cjSob) : '', n0(a.cjTot), fmt.usd(a.usd), fmt.usd(D.prev[f].usd)], f); }),
+      (() => { const a = D.g.ALL; return rowOf(['Total Grupo', n0(a.cajas), pc2(a.merma), pc2(D.gp.ALL.merma), pc2(D.gl.ALL.merma), n0(a.cjEvit), n0(a.cjRech), n0(a.cjCampo), n1(a.cjSob), n0(a.cjTot), fmt.usd(a.usd), fmt.usd(D.gp.ALL.usd)], null, { __tot: 1 }); })()],
+    { fs: 7.2, hfs: 6.6, left: 36, right: 36 });
+  doc.setFontSize(7.2); doc.setTextColor(110); doc.text(`Merma de proceso total del período (referencia): ${n0(D.g.ALL.cjProc)} cajas, ${fmt.usd(D.g.ALL.usdProc)}. Solo se cuenta como pérdida lo que pasa de la meta de ${pc1(mermaMeta())}.`, 36, Y - 6); doc.setTextColor(0); Y += 4;
+  Y = addImg(doc, I, Y, chartImg({ type: 'bar', data: { labels: range(1, 13).map((k) => 'P' + k), datasets: [['Proceso sobre meta', 'cjEvit', '#ef6c00'], ['Recusados', 'cjRech', '#c62828'], ['Campo', 'cjCampo', '#8e24aa'], ['Sobrepeso', 'cjSob', '#1565c0']].map(([l, k, c]) => ({ label: l, data: D.trend[y].map((t) => (t ? t[k] : null)), backgroundColor: c, stack: 's' })) },
+    options: { plugins: { title: { text: `Cajas perdidas por período y causa · ${y}` } }, scales: { x: { stacked: true }, y: { stacked: true } } } }), 480, 190);
+  Y = addImg(doc, I, Y, chartImg(perTrend(D, 'merma', `% merma de proceso del grupo por período · ${y} vs ${y - 1}`, pc1, { ref: mermaMeta(), refLabel: 'Meta', auto: true, yfmt: (v) => (v * 100).toFixed(0) + '%' })), 480, 165);
+  // ===== Sigatoka y lluvia =====
+  await tick2('Sigatoka y lluvia…'); Y = pdfPage(doc, I); Y = secT(doc, `SIGATOKA Y LLUVIA · PERÍODO ${p}`, Y);
+  Y = tbl(doc, Y, [['Hacienda', `YLS ${D.lbl}`, `YLS ${D.lblP}`, `YLS ${D.lblL}`, 'YLWS', `YLWS ${D.lblL}`, 'I.I', `I.I ${D.lblL}`, '% 4ta hoja', 'E.F', `Lluvia mm ${D.lbl}`, `mm ${D.lblP}`, `mm ${D.lblL}`]],
+    [...FS.map((f) => { const a = D.cur[f], b = D.prev[f], c = D.last[f]; return rowOf([NOM[f], n1(a.sig.yls), n1(b.sig.yls), n1(c.sig.yls), n1(a.sig.ylws), n1(c.sig.ylws), n3(a.sig.ii), n3(c.sig.ii), pc0(a.sig.pct4), n2(a.sig.ef), n0(a.lluvia), n0(b.lluvia), n0(c.lluvia)], f); }),
+      (() => { const a = D.g.ALL, b = D.gp.ALL, c = D.gl.ALL; return rowOf(['Grupo (pond. ha)', n1(a.sig.yls), n1(b.sig.yls), n1(c.sig.yls), n1(a.sig.ylws), n1(c.sig.ylws), n3(a.sig.ii), n3(c.sig.ii), pc0(a.sig.pct4), n2(a.sig.ef), n0(a.lluvia), n0(b.lluvia), n0(c.lluvia)], null, { __tot: 1 }); })()],
+    { fs: 7.2, hfs: 6.6, left: 36, right: 36, cell: (d) => { if (d.section === 'body' && d.column.index === 1 && d.row.index < FS.length) { const v = D.cur[FS[d.row.index]].sig.yls; if (v != null) d.cell.styles.fillColor = v < 6 ? [244, 199, 195] : v < 8 ? [255, 236, 179] : [200, 230, 201]; } } });
+  const sigW2 = Math.max(0, ...Object.keys(M.sigY?.[y]?.['PORVENIR'] || {}).map(Number)); if (sigW2 && sigW2 < w2) { doc.setFontSize(7.2); doc.setTextColor(110); doc.text(`Sigatoka con lecturas hasta la semana ${sigW2}.`, 36, Y - 6); doc.setTextColor(0); }
+  Y = addImg(doc, I, Y, chartImg(perTrend(D, 'yls', `YLS promedio del grupo por período · ${y} vs ${y - 1}`, n1, { sig: true, auto: true })), 480, 160);
+  Y = addImg(doc, I, Y, chartImg(perBars(D, lbl, FS.map((f) => D.cur[f].lluvia), FS.map((f) => D.prev[f].lluvia), FS.map((f) => D.last[f].lluvia), `Lluvia del período por hacienda (mm) · ${D.lbl} vs ${D.lblP} vs ${D.lblL}`, n0)), 480, 180);
+  // ===== Labores y fertilización =====
+  await tick2('Labores…'); Y = pdfPage(doc, I); Y = secT(doc, `CUMPLIMIENTO DE LABORES EN EL PERÍODO ${p}`, Y);
+  Y = tbl(doc, Y, [['Hacienda', ...LABS3.flatMap((l) => [`${LABN[l]} progr. ha`, 'Realiz. ha', '%'])]],
+    [...FS.map((f) => rowOf([NOM[f], ...LABS3.flatMap((l) => { const x = D.cur[f].lab[l]; return [n2(x.p), n2(x.r), pc0(x.pct)]; })], f)),
+      rowOf(['Total Grupo', ...LABS3.flatMap((l) => { const x = D.g.ALL.lab[l]; return [n2(x.p), n2(x.r), pc0(x.pct)]; })], null, { __tot: 1 })],
+    { fs: 7.2, hfs: 6.6, left: 36, right: 36, cell: (d) => { if (d.section === 'body' && [3, 6, 9].includes(d.column.index)) { const v = parseFloat(String(d.cell.raw)) / 100; if (isFinite(v)) d.cell.styles.fillColor = v < 0.8 ? [244, 199, 195] : v < 0.95 ? [255, 236, 179] : [200, 230, 201]; } } });
+  Y = addImg(doc, I, Y, chartImg({ type: 'bar', data: { labels: lbl, datasets: LABS3.map((l, i) => ({ label: LABN[l], data: FS.map((f) => D.cur[f].lab[l].pct), backgroundColor: ['#2e7d32', '#1565c0', '#f2b705'][i], vl: pc0, vlSize: 10 })).concat([{ type: 'line', label: 'Meta 95%', data: FS.map(() => 0.95), borderColor: '#d32f2f', borderWidth: 2, pointRadius: 0 }]) },
+    options: { plugins: { title: { text: `Cumplimiento de labores (realizado ÷ programado) · ${D.lbl}` } }, scales: { y: { min: 0, ticks: { callback: (v) => Math.round(v * 100) + '%' } } } } }), 480, 200);
+  Y = rich(doc, mailLabores(y, w2, D.ws).replace(/^\* /gm, '• '), 50, Y, pageW(doc) - 100, 9.5, I);
+  // ===== Semáforo y acciones =====
+  await tick2('Semáforo y acciones…'); Y = pdfPage(doc, I); Y = secT(doc, `SEMÁFORO DEL PERÍODO ${p} Y 3 ACCIONES CORRECTIVAS`, Y);
+  const st = FS.map((f) => perStatus(D, f));
+  Y = tbl(doc, Y, [['Hacienda', 'Semáforo', 'Cajas/ha', `vs ${y - 1}`, 'Ratio', 'Recobro', '% Recus.', '% Merma', 'YLS', 'Alertas']],
+    st.map((s) => { const a = D.cur[s.f]; return rowOf([NOM[s.f], s.sem, n2(a.cjHa), vpct(a.cjHa, D.last[s.f].cjHa), n2(a.ratio), pc1(a.recobro), pc2(a.recPct), pc1(a.merma), n1(a.sig.yls), s.al.map((x) => x[1]).join(' · ')], s.f); }),
+    { fs: 7.2, left: 36, right: 36, cols: { 0: { halign: 'left' }, 9: { halign: 'left', cellWidth: 170 } }, cell: (d) => { if (d.section === 'body' && d.column.index === 1) { const c = { ROJO: [244, 199, 195], AMARILLO: [255, 236, 179], VERDE: [200, 230, 201] }[d.cell.raw]; if (c) d.cell.styles.fillColor = c; } } });
+  const acc = perAcciones(D);
+  Y = rich(doc, acc.map((x, i) => `**${i + 1}. ${x.t}**\n${x.por} Responsable: ${x.r}. Cierre: ${x.k}.${x.usd ? ` En juego: ${fmt.usd(x.usd)}.` : ''}`).join('\n\n') || 'Sin acciones críticas en el período.', 50, Y + 4, pageW(doc) - 100, 10, I);
+  const np = doc.getNumberOfPages(); for (let i = 1; i <= np; i++) { doc.setPage(i); doc.setFontSize(7.5); doc.setTextColor(130); doc.text(`Viesfrut S.A. · Informe del período ${p}-${y} · pág. ${i}/${np}`, pageW(doc) / 2, pageH(doc) - 16, { align: 'center' }); }
+  return doc;
+}
+// ----- pestaña: informe de período (visible para todos; generar PDF y texto de correo solo alfonso) -----
+function rInfPer() {
+  const el = $('#t-infper'); const y = M.year; const nP = perOfWeek(M.lastWeek); const p = S.perP && S.perP <= nP ? S.perP : (M.lastWeek % 4 === 0 ? nP : Math.max(1, nP - 1));
+  const D = perData(y, p); const FS = E.FARMS; const adm = IS_ADMIN();
+  const hd = PER_HEAD(D); const rows = perKpiRows(D);
+  const vcls = (s) => (/^-/.test(s) ? 'c-ROJO' : /^\+/.test(s) ? 'c-VERDE' : '');
+  const st = FS.map((f) => perStatus(D, f)); const acc = perAcciones(D);
+  const md = (t) => esc(t).replace(/\*\*([^*]+)\*\*/g, '<b>$1</b>').replace(/\n/g, '<br>');
+  el.innerHTML = `<div class="toolbar"><span class="note">Informe para Gerencia General. Elija el período:</span>
+    <div class="chips" id="perChips">${range(1, nP).map((k) => `<button class="${k === p ? 'on' : ''}" data-p="${k}">P${k}</button>`).join('')}</div>
+    ${adm ? `<button class="primary" id="perPdf">📄 Generar PDF del período</button><button class="sec" id="perMail">✉ Texto para correo</button>` : ''}</div>
+  <p class="note">Período ${p} = semanas ${D.ws[0]} a ${D.ws[D.ws.length - 1]} de ${y}${D.complete ? '' : ' (en curso)'}. Se compara con el período anterior (${D.lblP}) y con el mismo período de ${y - 1} (${D.lblL}).</p>
+  <div class="card scroll"><h3>Resumen ejecutivo del período</h3><table class="t"><tr>${hd.map((h, i) => `<th class="${i ? '' : 'l'}">${esc(h)}</th>`).join('')}</tr>
+    ${rows.map((r) => `<tr>${r.map((v, i) => `<td class="${i === 0 ? 'l' : [3, 5, 8].includes(i) && !r.__neu ? (r.__inv ? vcls(String(v)).replace('ROJO', 'X').replace('VERDE', 'ROJO').replace('X', 'VERDE') : vcls(String(v))) : ''}">${esc(v)}</td>`).join('')}</tr>`).join('')}</table>
+    <p class="note" style="margin-top:8px">${md(perNarr(D))}</p></div>
+  <div class="grid" style="margin-top:14px">
+    <div class="card"><h3>Cajas por hectárea · ${D.lbl} vs ${D.lblP} vs ${D.lblL}</h3><div class="chart"><canvas id="ip1"></canvas></div></div>
+    <div class="card"><h3>Cajas/ha del grupo por período · ${y} vs ${y - 1}</h3><div class="chart"><canvas id="ip2"></canvas></div></div>
+    <div class="card"><h3>Ratio por período</h3><div class="chart"><canvas id="ip3"></canvas></div></div>
+    <div class="card"><h3>Cajas perdidas (merma) por período · ${y}</h3><div class="chart"><canvas id="ip4"></canvas></div></div>
+  </div>
+  <h2>Por hacienda · ${D.lbl}</h2>
+  <div class="card scroll"><table class="t"><tr><th class="l">Hacienda</th><th>Cajas</th><th>Cj/ha</th><th>vs ${D.lblP}</th><th>vs ${D.lblL}</th><th>Enf/ha</th><th>Ratio</th><th>Peso kg</th><th>% Recus.</th><th>Recobro</th><th>% Merma</th><th>USD merma</th><th>YLS</th><th>Lluvia mm</th><th>Maleza</th><th>Selección</th><th>Limpieza</th><th>Semáforo</th></tr>
+    ${FS.map((f, i) => { const a = D.cur[f]; return `<tr><td class="l">${NOM[f]}</td><td>${fmt.int(a.cajas)}</td><td>${fmt.d2(a.cjHa)}</td><td class="${vcls(vpct(a.cjHa, D.prev[f].cjHa))}">${vpct(a.cjHa, D.prev[f].cjHa)}</td><td class="${vcls(vpct(a.cjHa, D.last[f].cjHa))}">${vpct(a.cjHa, D.last[f].cjHa)}</td><td>${fmt.d2(a.enfHa)}</td><td>${fmt.d2(a.ratio)}</td><td>${fmt.d2(a.peso)}</td><td>${a.recPct == null ? '—' : (a.recPct * 100).toFixed(2) + '%'}</td><td class="${a.recobro == null ? '' : a.recobro < 0.95 || a.recobro > 1.02 ? 'bg-ROJO' : a.recobro < 0.98 ? 'bg-AMARILLO' : 'bg-VERDE'}">${fmt.p1(a.recobro)}</td><td>${fmt.p1(a.merma)}</td><td>${fmt.usd(a.usd)}</td><td>${fmt.d1(a.sig.yls)}</td><td>${fmt.int(a.lluvia)}</td>${LABS3.map((l) => `<td class="${pctCls(a.lab[l].pct)}">${fmt.p0(a.lab[l].pct)}</td>`).join('')}<td><span class="pill ${st[i].sem}">${st[i].sem}</span></td></tr>`; }).join('')}
+    ${(() => { const a = D.g.ALL; return `<tr style="font-weight:700"><td class="l">Total Grupo</td><td>${fmt.int(a.cajas)}</td><td>${fmt.d2(a.cjHa)}</td><td>${vpct(a.cjHa, D.gp.ALL.cjHa)}</td><td>${vpct(a.cjHa, D.gl.ALL.cjHa)}</td><td>${fmt.d2(a.enfHa)}</td><td>${fmt.d2(a.ratio)}</td><td>${fmt.d2(a.peso)}</td><td>${(a.recPct * 100).toFixed(2)}%</td><td>${fmt.p1(a.recobro)}</td><td>${fmt.p1(a.merma)}</td><td>${fmt.usd(a.usd)}</td><td>${fmt.d1(a.sig.yls)}</td><td>${fmt.int(a.lluvia)}</td>${LABS3.map((l) => `<td>${fmt.p0(a.lab[l].pct)}</td>`).join('')}<td></td></tr>`; })()}</table></div>
+  <h2>3 acciones correctivas del período</h2><div class="acc">${acc.map((x, i) => `<div class="item"><div class="n">${i + 1}</div><div><div>${esc(x.t)}</div><div class="meta">${esc(x.por)} · <b>Responsable:</b> ${esc(x.r)} · <b>Cierre:</b> ${esc(x.k)}${x.usd ? ` · <b>En juego:</b> ${fmt.usd(x.usd)}` : ''}</div></div></div>`).join('') || 'Sin acciones críticas en el período.'}</div>
+  <h2>Alertas por hacienda</h2><div class="alerts">${st.filter((s) => s.al.length).map((s) => `<div class="alert ${s.sem}"><b>${NOM[s.f]}:</b> ${esc(s.al.map((a) => a[1]).join(' · '))}</div>`).join('') || '<div class="alert">Sin alertas.</div>'}</div>`;
+  el.querySelectorAll('#perChips button').forEach((b) => (b.onclick = () => { S.perP = +b.dataset.p; rInfPer(); }));
+  if (adm) { $('#perPdf').onclick = () => openReportPanel('per', p); $('#perMail').onclick = () => showMailText(`Correo · período ${p} ${y}`, mailPeriod(D)); }
+  chart('ip1', perBars(D, FS.map((f) => NOM[f]), FS.map((f) => D.cur[f].cjHa), FS.map((f) => D.prev[f].cjHa), FS.map((f) => D.last[f].cjHa), ''));
+  const tr = (k, o = {}) => { const c = perTrend(D, k, '', o.vf || n2, o); c.options.plugins.title = { display: false }; c.data.datasets.forEach((d) => delete d.vl); return c; };
+  chart('ip2', tr('cjHa', { auto: true })); chart('ip3', tr('ratio', { auto: true }));
+  chart('ip4', { type: 'bar', data: { labels: range(1, 13).map((k) => 'P' + k), datasets: [['Proceso sobre meta', 'cjEvit', '#ef6c00'], ['Recusados', 'cjRech', '#c62828'], ['Campo', 'cjCampo', '#8e24aa'], ['Sobrepeso', 'cjSob', '#1565c0']].map(([l, k, c]) => ({ label: l, data: D.trend[y].map((t) => (t ? t[k] : null)), backgroundColor: c, stack: 's' })) }, options: { scales: { x: { stacked: true }, y: { stacked: true } } } });
+}
+function showMailText(title, txt) {
+  const P = $('#appPanelBody'); $('#appPanel').hidden = false;
+  P.innerHTML = `<h2>✉ ${esc(title)}</h2><p class="note">Texto listo para pegar en el correo a Gerencia. Puede editarlo antes de copiar.</p>
+    <textarea id="mailTxt" style="width:100%;height:55vh;font-family:Consolas,Menlo,monospace;font-size:12.5px;line-height:1.45;padding:10px;border:1px solid #ccd3cc;border-radius:8px">${esc(txt)}</textarea>
+    <div class="row" style="justify-content:flex-end;gap:8px;margin-top:8px"><span id="mailMsg" class="note"></span><button class="primary" id="mailCopy">📋 Copiar texto</button><button class="ghost" id="mailClose">Cerrar</button></div>`;
+  $('#mailClose').onclick = () => ($('#appPanel').hidden = true);
+  $('#mailCopy').onclick = async () => { const t = $('#mailTxt').value; try { await navigator.clipboard.writeText(t); $('#mailMsg').textContent = 'Copiado.'; } catch (e) { $('#mailTxt').select(); document.execCommand('copy'); $('#mailMsg').textContent = 'Copiado.'; } };
+}
+
 // ---------- informe de control Sigatoka ----------
 function sigChartCfg(f, y, kind) {
   const X = range(1, 53); const A = M.sigY?.[y]?.[f] || {}; const B = M.sigY?.[y - 1]?.[f] || {}; const g = (o, w, k) => (o[w] && o[w][k] != null ? o[w][k] : null);
@@ -3169,22 +3540,31 @@ async function buildSigPDF(y, w, onp = () => {}) {
   return doc;
 }
 // ---------- ventana para elegir semana y generar ----------
-function openReportPanel(kind) {
+function openReportPanel(kind, pSel) {
+  if (!IS_ADMIN()) return;
   const P = $('#appPanelBody'); $('#appPanel').hidden = false; const y = M.year;
-  const ws = range(1, M.lastWeek).reverse();
-  P.innerHTML = `<h2>${kind === 'sig' ? '🍃 Informe de control Sigatoka' : '📄 Informe semanal de producción'} (PDF)</h2>
-  <p class="note">${kind === 'sig' ? 'Formato del informe de Indicadores de Sigatoka: resumen de la semana y, por finca, plantas de 3 metros, 0 semanas, 10 semanas y emisión foliar (año actual y año anterior).' : 'Mismo formato del informe INDICADORES DE SEMANA: enfunde, cajas, labores por ciclo, fertilización, parámetros de producción, recusados, lluvia, recobro, ratio, peso, manos, calibración y 3 acciones correctivas.'}</p>
-  <div class="row"><label>Semana <select id="rpW">${ws.map((x) => `<option value="${x}">S${x} · ${y}</option>`).join('')}</select></label><button class="primary" id="rpGo">Generar PDF</button></div>
-  <p id="rpMsg" class="note"></p><div style="text-align:right"><button class="ghost" id="rpClose">Cerrar</button></div>`;
+  const ws = range(1, M.lastWeek).reverse(); const nP = perOfWeek(M.lastWeek); const ps = range(1, nP).reverse();
+  const defP = pSel || (M.lastWeek % 4 === 0 ? nP : Math.max(1, nP - 1));
+  const T = { sig: '🍃 Informe de control Sigatoka', prod: '📄 Informe semanal de producción', per: '📊 Informe de período para Gerencia General' }[kind];
+  const N = { sig: 'Formato del informe de Indicadores de Sigatoka: resumen de la semana y, por finca, plantas de 3 metros, 0 semanas, 10 semanas y emisión foliar (año actual y año anterior).',
+    prod: 'Mismo formato del informe INDICADORES DE SEMANA: enfunde, cajas, labores por ciclo, fertilización, parámetros de producción, recusados, lluvia, recobro, merma, ratio, peso, manos, calibración y 3 acciones correctivas. Al generarlo aparece el texto para el correo.',
+    per: 'Mismo formato del informe semanal, con los totales del período de 4 semanas y su comparación con el período anterior y con el mismo período del año pasado: cajas, enfunde, parámetros, recusados, recobro, merma, sigatoka, lluvia, labores, semáforo y 3 acciones. Al generarlo aparece el texto para el correo.' }[kind];
+  P.innerHTML = `<h2>${T} (PDF)</h2><p class="note">${N}</p>
+  <div class="row">${kind === 'per' ? `<label>Período <select id="rpW">${ps.map((x) => `<option value="${x}" ${x === defP ? 'selected' : ''}>P${x} · S${(x - 1) * 4 + 1}–S${Math.min(x * 4, M.lastWeek)} · ${y}${x * 4 > M.lastWeek ? ' (en curso)' : ''}</option>`).join('')}</select></label>` : `<label>Semana <select id="rpW">${ws.map((x) => `<option value="${x}">S${x} · ${y}</option>`).join('')}</select></label>`}<button class="primary" id="rpGo">Generar PDF</button></div>
+  <p id="rpMsg" class="note"></p><div id="rpMail"></div><div style="text-align:right"><button class="ghost" id="rpClose">Cerrar</button></div>`;
   $('#rpClose').onclick = () => ($('#appPanel').hidden = true);
   $('#rpGo').onclick = async () => {
     const w = +$('#rpW').value; $('#rpGo').disabled = true; const msg = (t) => ($('#rpMsg').textContent = t);
     try {
       msg('Preparando…'); await tick();
-      const doc = kind === 'sig' ? await buildSigPDF(y, w, msg) : await buildWeeklyPDF(y, w, msg);
-      const name = kind === 'sig' ? `Indicadores Sigatoka sem.${String(w).padStart(2, '0')} ${y}.pdf` : `INDICADORES DE SEMANA ${String(w).padStart(2, '0')} ${y}.pdf`;
+      const doc = kind === 'sig' ? await buildSigPDF(y, w, msg) : kind === 'per' ? await buildPeriodPDF(y, w, msg) : await buildWeeklyPDF(y, w, msg);
+      const name = kind === 'sig' ? `Indicadores Sigatoka sem.${String(w).padStart(2, '0')} ${y}.pdf` : kind === 'per' ? `INFORME DE PERIODO ${String(w).padStart(2, '0')} ${y}.pdf` : `INDICADORES DE SEMANA ${String(w).padStart(2, '0')} ${y}.pdf`;
       const how = await deliverFile(name, doc.output('blob'), () => doc.save(name));
       msg(how === 'declined' ? 'Descarga cancelada.' : `Listo: ${name} (${doc.getNumberOfPages()} páginas).${how === 'saved' ? ' Revise la carpeta de Descargas.' : ''}`);
+      if (kind !== 'sig') { const txt = kind === 'per' ? mailPeriod(perData(y, w)) : mailWeekly(y, w);
+        $('#rpMail').innerHTML = `<h3 style="margin-top:12px">✉ Texto para el correo a Gerencia</h3><textarea id="mailTxt" style="width:100%;height:42vh;font-family:Consolas,Menlo,monospace;font-size:12.5px;line-height:1.45;padding:10px;border:1px solid #ccd3cc;border-radius:8px">${esc(txt)}</textarea>
+          <div class="row" style="justify-content:flex-end;gap:8px"><span id="mailMsg" class="note"></span><button class="primary" id="mailCopy">📋 Copiar texto</button></div>`;
+        $('#mailCopy').onclick = async () => { const t = $('#mailTxt').value; try { await navigator.clipboard.writeText(t); } catch (e) { $('#mailTxt').select(); document.execCommand('copy'); } $('#mailMsg').textContent = 'Copiado.'; }; }
     } catch (e) { console.error(e); msg('No se pudo generar: ' + e.message); } finally { $('#rpGo').disabled = false; }
   };
 }
@@ -3316,7 +3696,8 @@ async function appShow(model, file, user) {
   $('#login').hidden = true;
   // los informes PDF solo los genera el administrador (alfonso)
   const admin = String(user || '').toLowerCase() === 'alfonso';
-  for (const id of ['bRep', 'bRepS']) { const b = document.getElementById(id); if (b) b.hidden = !admin; }
+  window.VF_APP_USER = String(user || '').toLowerCase();
+  for (const id of ['bRep', 'bRepS', 'bRepP']) { const b = document.getElementById(id); if (b) b.hidden = !admin; }
   await setModel(model, false);
   prog(`${user} · datos semana ${file.semana || model.lastWeek}/${file.anio || model.year} · publicados ${new Date(file.creado).toLocaleDateString('es-EC', { day: '2-digit', month: 'short' })}`);
 }
@@ -3337,7 +3718,7 @@ function showLogin(file) {
 }
 async function appBoot() {
   document.body.classList.add('app');
-  for (const id of ['bRefresh', 'bConnect', 'bFiles', 'bCsv', 'bApp', 'bRep', 'bRepS']) { const b = document.getElementById(id); if (b) b.hidden = true; }
+  for (const id of ['bRefresh', 'bConnect', 'bFiles', 'bCsv', 'bApp', 'bRep', 'bRepS', 'bRepP']) { const b = document.getElementById(id); if (b) b.hidden = true; }
   $('#welcome').hidden = true; $('#bLogout').hidden = false;
   $('#bLogout').onclick = () => { try { localStorage.removeItem(SESS); sessionStorage.removeItem(SESS); } catch (e) {} location.reload(); };
   $('#lgFile').onclick = (e) => { e.preventDefault(); $('#lgIn').click(); };
