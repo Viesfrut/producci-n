@@ -2964,7 +2964,7 @@ async function buildWeeklyPDF(y, w, onp = () => {}) {
   const cyc = currentCycle(); const fc = cyc ? fertCycle(cyc, w) : {};
   const logs = (M.fertLog || []).filter((x) => x.sem <= w);
   const fw0 = (() => { const l = logs.filter((x) => x.ciclo === cyc && x.mezcla > 0).map((x) => x.sem); const e = (M.entregas?.[cyc] || []).map((x) => { const d = new Date(x.fecha + 'T00:00:00Z'); for (let k = 1; k <= 53; k++) if (weekEnd(y, k) >= d) return k; return w; }); const all = [...l, ...e]; return all.length ? Math.min(...all) : w - 4; })();
-  const fWs = range(Math.min(fw0, w - 4), Math.min(fw0, w - 4) + 5);
+  const fWs = range(Math.min(fw0, w - 4), Math.max(Math.min(fw0, w - 4) + 5, w));
   const fBody = FS.filter((f) => fc[f] && (fc[f].sacosProg || fc[f].sacosEnt || fc[f].sacos)).map((f) => { const x = fc[f]; const per = fWs.map((ww) => sum(logs.filter((l) => l.farm === f && l.ciclo === cyc && l.sem === ww).map((l) => l.mezcla))); const t = sum(per);
     return rowOf([NOM[f].toUpperCase(), n2(x.ha), n0(x.sacosProg), n0(x.sacosEnt), ...per.map((v) => (v ? n0(v) : '')), n0(t), n0(t - (x.sacosEnt || x.sacosProg || 0))], f); });
   const sumC = (i) => sum(fBody.map((r) => parseFloat(String(r[i]).replace(/\./g, '').replace(',', '.')) || 0));
