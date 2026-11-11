@@ -3306,6 +3306,63 @@ ${mailLabores(y, w)}
 
 Adjunto el informe completo con el detalle por finca y gráficas de cada indicador.`;
 }
+function mailSig(y, w) {
+  const FS = E.FARMS.filter((f) => Object.keys(M.sigY?.[y]?.[f] || {}).length);
+  const s = (f, k, ww = w) => M.sigY?.[y]?.[f]?.[ww]?.[k] ?? null; const s0 = (f, k) => M.sigY?.[y - 1]?.[f]?.[w]?.[k] ?? null;
+  const ok = (k) => FS.filter((f) => s(f, k) != null);
+  const prom = (k) => { const l = ok(k); return l.length ? sum(l.map((f) => s(f, k))) / l.length : null; };
+  const prom0 = (k) => { const l = FS.filter((f) => s0(f, k) != null); return l.length ? sum(l.map((f) => s0(f, k))) / l.length : null; };
+  const hiII = ok('ii').filter((f) => s(f, 'ii') > 0.2).sort((a, b) => s(b, 'ii') - s(a, 'ii'));
+  const hi4 = ok('pct4').filter((f) => s(f, 'pct4') > 0.25).sort((a, b) => s(b, 'pct4') - s(a, 'pct4'));
+  const loYLS = ok('yls').filter((f) => s(f, 'yls') < 8).sort((a, b) => s(a, 'yls') - s(b, 'yls'));
+  const hi0 = ok('ii0').filter((f) => s(f, 'ii0') > 0.2).sort((a, b) => s(b, 'ii0') - s(a, 'ii0'));
+  const hi10 = ok('ii10').filter((f) => s(f, 'ii10') > 0.4).sort((a, b) => s(b, 'ii10') - s(a, 'ii10'));
+  const loEF = ok('ef').filter((f) => s(f, 'ef') < 0.8).sort((a, b) => s(a, 'ef') - s(b, 'ef'));
+  const up = ok('ii').filter((f) => s(f, 'ii', w - 1) != null && s(f, 'ii') > s(f, 'ii', w - 1));
+  const dn = ok('ii').filter((f) => s(f, 'ii', w - 1) != null && s(f, 'ii') < s(f, 'ii', w - 1));
+  const y10 = ok('yls10').map((f) => s(f, 'yls10'));
+  const linea = (f) => `* ${NOM[f]}: Hojas ${n1(s(f, 'hojas'))} | YLS ${n1(s(f, 'yls'))} | YLWS ${n1(s(f, 'ylws'))} | I.I ${n2(s(f, 'ii'))}${s(f, 'ii', w - 1) != null && s(f, 'ii') != null ? ` (S${w - 1}: ${n2(s(f, 'ii', w - 1))})` : ''} | 4ta hoja ${pc0(s(f, 'pct4'))} | E.F ${n2(s(f, 'ef'))}`;
+  // lluvia de la semana (mm y días) en las fincas evaluadas
+  const ll = FS.map((f) => ({ f, mm: M.lluvia?.byYear?.[y]?.[f]?.[w] ?? null, d: M.lluvia?.dias?.[f]?.[w] ?? null })).filter((x) => x.mm != null);
+  const llP = ll.length ? sum(ll.map((x) => x.mm)) / ll.length : null; const llMax = ll.slice().sort((a, b) => b.mm - a.mm)[0];
+  // aplicaciones aéreas realizadas (Plan Sigatoka) hasta la semana
+  const fin = weekEnd(y, w); const apps = (M.planSig?.apps || []).filter((a) => a.sem <= w && (!a.fecha || new Date(a.fecha + 'T00:00:00Z') <= fin));
+  const ult = FS.map((f) => { const l = apps.filter((a) => a.farm === f && a.fecha).map((a) => a.fecha).sort(); const u = l[l.length - 1]; return u ? { f, u, d: Math.round((fin - new Date(u + 'T00:00:00Z')) / 864e5) } : null; }).filter(Boolean);
+  const largo = ult.filter((x) => x.d > 14).sort((a, b) => b.d - a.d);
+  const usd4 = sum(apps.filter((a) => a.sem >= w - 3).map((a) => a.usd || 0));
+  const fecha = (d) => d.split('-').reverse().slice(0, 2).join('/');
+  const alertas = [];
+  if (hiII.length) alertas.push(`Índice de infección sobre el umbral de 0,20 en ${lista(hiII.map((f) => `${NOM[f]} (${n2(s(f, 'ii'))})`))}.`);
+  if (hi4.length) alertas.push(`Más del 25% de plantas con síntomas en la 4ta hoja en ${lista(hi4.map((f) => `${NOM[f]} (${pc0(s(f, 'pct4'))})`))}.`);
+  if (loYLS.length) alertas.push(`YLS bajo 8 hojas en ${lista(loYLS.map((f) => `${NOM[f]} (${n1(s(f, 'yls'))})`))}.`);
+  if (hi0.length) alertas.push(`Plantas de 0 semanas con I.I sobre 0,20 en ${lista(hi0.map((f) => `${NOM[f]} (${n2(s(f, 'ii0'))})`))}.`);
+  if (hi10.length) alertas.push(`Plantas de 10 semanas con I.I sobre 0,40 en ${lista(hi10.map((f) => `${NOM[f]} (${n2(s(f, 'ii10'))})`))}.`);
+  if (loEF.length) alertas.push(`Emisión foliar bajo 0,80 en ${lista(loEF.map((f) => `${NOM[f]} (${n2(s(f, 'ef'))})`))}.`);
+  if (largo.length) alertas.push(`Más de 14 días desde la última aplicación aérea en ${lista(largo.map((x) => `${NOM[x.f]} (${x.d} días)`))}.`);
+  const iiP = prom('ii'), iiP0 = prom0('ii');
+  return `Me permito presentar el resumen de los indicadores de control de Sigatoka correspondientes a la semana ${w} del año ${y}.
+
+${secMail('PLANTAS DE 3 METROS')}
+Promedio de las fincas: Hojas ${n1(prom('hojas'))} | YLS ${n1(prom('yls'))} | YLWS ${n1(prom('ylws'))} | I.I ${n2(iiP)}${iiP0 != null ? ` (misma semana de ${y - 1}: ${n2(iiP0)})` : ''}
+${FS.map(linea).join('\n')}
+${hiII.length ? `El índice de infección supera el umbral de 0,20 en ${lista(hiII.map((f) => NOM[f]))}.` : 'Todas las fincas se mantienen bajo el umbral de 0,20 de índice de infección.'}${up.length ? ` Sube frente a la semana ${w - 1} en ${lista(up.map((f) => NOM[f]))}` : ''}${up.length && dn.length ? `; baja en ${lista(dn.map((f) => NOM[f]))}.` : up.length ? '.' : dn.length ? ` Baja frente a la semana ${w - 1} en ${lista(dn.map((f) => NOM[f]))}.` : ''}
+
+${secMail('PLANTAS DE 0 Y 10 SEMANAS')}
+0 semanas: I.I promedio ${n2(prom('ii0'))}, ${hi0.length ? `sobre 0,20 en ${lista(hi0.map((f) => `${NOM[f]} (${n2(s(f, 'ii0'))})`))}` : 'todas bajo 0,20'}.
+10 semanas: YLS a la cosecha entre ${y10.length ? n1(Math.min(...y10)) : ''} y ${y10.length ? n1(Math.max(...y10)) : ''} hojas; I.I ${hi10.length ? `sobre 0,40 en ${lista(hi10.map((f) => `${NOM[f]} (${n2(s(f, 'ii10'))})`))}` : 'bajo 0,40 en todas las fincas'}.
+
+${secMail('EMISIÓN FOLIAR Y CLIMA')}
+Emisión foliar promedio ${n2(prom('ef'))} (umbral 0,80)${loEF.length ? `; bajo el umbral en ${lista(loEF.map((f) => `${NOM[f]} (${n2(s(f, 'ef'))})`))}` : '; todas en o sobre el umbral'}.
+${llP != null ? `Lluvia de la semana: ${n1(llP)} mm promedio por finca${llMax && llMax.mm > 0 ? `, máximo en ${NOM[llMax.f]} con ${n1(llMax.mm)} mm${llMax.d ? ` en ${llMax.d} días` : ''}` : ''}.` : 'Sin registro de lluvia para la semana.'}
+
+${secMail('PROGRAMA DE APLICACIONES AÉREAS')}
+${ult.length ? `Última aplicación por finca: ${lista(ult.map((x) => `${NOM[x.f]} ${fecha(x.u)} (${x.d} días)`))}.\nCosto de las aplicaciones de las últimas 4 semanas: ${fmt.usd(usd4)}.` : 'Sin aplicaciones registradas en el Plan Sigatoka.'}
+
+${secMail('PUNTOS DE ATENCIÓN')}
+${alertas.length ? alertas.map((a) => '* ' + a).join('\n') : '* Sin alertas: todos los indicadores dentro de los umbrales.'}
+
+Adjunto el informe completo con las gráficas por finca de plantas de 3 metros, 0 semanas, 10 semanas y emisión foliar.`;
+}
 function mailPeriod(D) {
   const { g, gp, gl, y, p, ws, cur } = D; const FS = E.FARMS;
   const L1 = (n, a, b, c) => `${n}: ${n0(a.cajas)} cajas exportadas | ${n2(a.cjHa)} cajas/ha | Ratio ${n2(a.ratio)} (${D.lblP}: ${b.cjHa ? `${n2(b.cjHa)} cj/ha, ${vpct(a.cjHa, b.cjHa)}` : 'sin dato'}; ${D.lblL}: ${c.cjHa ? `${n2(c.cjHa)} cj/ha, ${vpct(a.cjHa, c.cjHa)}` : 'sin dato'})`;
@@ -3546,7 +3603,7 @@ function openReportPanel(kind, pSel) {
   const ws = range(1, M.lastWeek).reverse(); const nP = perOfWeek(M.lastWeek); const ps = range(1, nP).reverse();
   const defP = pSel || (M.lastWeek % 4 === 0 ? nP : Math.max(1, nP - 1));
   const T = { sig: '🍃 Informe de control Sigatoka', prod: '📄 Informe semanal de producción', per: '📊 Informe de período para Gerencia General' }[kind];
-  const N = { sig: 'Formato del informe de Indicadores de Sigatoka: resumen de la semana y, por finca, plantas de 3 metros, 0 semanas, 10 semanas y emisión foliar (año actual y año anterior).',
+  const N = { sig: 'Formato del informe de Indicadores de Sigatoka: resumen de la semana y, por finca, plantas de 3 metros, 0 semanas, 10 semanas y emisión foliar (año actual y año anterior). Al generarlo aparece el texto para el correo.',
     prod: 'Mismo formato del informe INDICADORES DE SEMANA: enfunde, cajas, labores por ciclo, fertilización, parámetros de producción, recusados, lluvia, recobro, merma, ratio, peso, manos, calibración y 3 acciones correctivas. Al generarlo aparece el texto para el correo.',
     per: 'Mismo formato del informe semanal, con los totales del período de 4 semanas y su comparación con el período anterior y con el mismo período del año pasado: cajas, enfunde, parámetros, recusados, recobro, merma, sigatoka, lluvia, labores, semáforo y 3 acciones. Al generarlo aparece el texto para el correo.' }[kind];
   P.innerHTML = `<h2>${T} (PDF)</h2><p class="note">${N}</p>
@@ -3561,7 +3618,7 @@ function openReportPanel(kind, pSel) {
       const name = kind === 'sig' ? `Indicadores Sigatoka sem.${String(w).padStart(2, '0')} ${y}.pdf` : kind === 'per' ? `INFORME DE PERIODO ${String(w).padStart(2, '0')} ${y}.pdf` : `INDICADORES DE SEMANA ${String(w).padStart(2, '0')} ${y}.pdf`;
       const how = await deliverFile(name, doc.output('blob'), () => doc.save(name));
       msg(how === 'declined' ? 'Descarga cancelada.' : `Listo: ${name} (${doc.getNumberOfPages()} páginas).${how === 'saved' ? ' Revise la carpeta de Descargas.' : ''}`);
-      if (kind !== 'sig') { const txt = kind === 'per' ? mailPeriod(perData(y, w)) : mailWeekly(y, w);
+      { const txt = kind === 'sig' ? mailSig(y, w) : kind === 'per' ? mailPeriod(perData(y, w)) : mailWeekly(y, w);
         $('#rpMail').innerHTML = `<h3 style="margin-top:12px">✉ Texto para el correo a Gerencia</h3><textarea id="mailTxt" style="width:100%;height:42vh;font-family:Consolas,Menlo,monospace;font-size:12.5px;line-height:1.45;padding:10px;border:1px solid #ccd3cc;border-radius:8px">${esc(txt)}</textarea>
           <div class="row" style="justify-content:flex-end;gap:8px"><span id="mailMsg" class="note"></span><button class="primary" id="mailCopy">📋 Copiar texto</button></div>`;
         $('#mailCopy').onclick = async () => { const t = $('#mailTxt').value; try { await navigator.clipboard.writeText(t); } catch (e) { $('#mailTxt').select(); document.execCommand('copy'); } $('#mailMsg').textContent = 'Copiado.'; }; }
